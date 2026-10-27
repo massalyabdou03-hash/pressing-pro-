@@ -495,10 +495,9 @@ function renderSum() {
     const n = d.lines.reduce((s, l) => s + l.qty, 0);
     bar.hidden = !n;
     bar.innerHTML = n ? '<div style="flex:1;min-width:0"><b>' + n + ' pièce' + (n > 1 ? 's' : '') + '</b> · ' + fmt(t.total) + ' FCFA<div style="font-size:12px;opacity:.8">' + esc(d.lines.map(l => l.qty + ' ' + l.name.toLowerCase()).join(', ')) + '</div></div>' +
-      '<button type="button" class="btn sm" data-act="nw-gosum">Valider</button>' : '';
+      '<button type="button" class="btn sm" data-act="nw-submit" style="flex:none">' + I.check + ' Créer le ticket</button>' : '';
   }
 }
-H['nw-gosum'] = () => { const s = $('#nw-sum'); if (s) s.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
 function addLine(name, price) {
   name = name.trim().replace(/\s+/g, ' ').slice(0, 60);
   if (!name) return;
@@ -605,7 +604,11 @@ H['nw-submit'] = t => {
   if (!needWrite()) return;
   const d = S.draft;
   if (!d.lines.length) return toast('Ajoute au moins un habit.', 'bad');
-  if (!d.customer.id && !d.customer.name.trim()) { toast('Indique le nom du client.', 'bad'); $('#nw-name').focus(); return; }
+  if (!d.customer.id && !d.customer.name.trim()) {
+    toast('Indique le nom du client.', 'bad');
+    const n = $('#nw-name'); n.scrollIntoView({ behavior: 'smooth', block: 'center' }); setTimeout(() => n.focus({ preventScroll: true }), 300);
+    return;
+  }
   const noPrice = d.lines.filter(l => !l.price);
   if (noPrice.length && !confirm(noPrice.map(l => l.name).join(', ') + ' : pas de prix. Créer quand même (gratuit) ?')) return;
   const tot = draftTotals();

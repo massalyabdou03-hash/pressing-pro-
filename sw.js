@@ -3,7 +3,7 @@
    - Fichiers du site : copie locale tout de suite, mise à jour en arrière-plan.
    - Librairies et polices (CDN) : copie locale d'abord.
    - Données (Supabase) : jamais mises en cache ici, l'app gère sa propre file d'attente. */
-const VERSION = 'pp-v1';
+const VERSION = 'pp-v2';
 const CORE = [
   '/app.html',
   '/assets/style.css',
@@ -14,6 +14,11 @@ const CORE = [
   '/assets/icons/icon-192.png',
   '/assets/icons/apple-touch-icon.png',
   '/manifest.webmanifest',
+  '/admin.html',
+  '/assets/admin.js',
+  '/assets/icons/admin.svg',
+  '/assets/icons/admin-192.png',
+  '/admin.webmanifest',
   'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/+esm'
 ];
@@ -51,7 +56,7 @@ self.addEventListener('fetch', event => {
       }).catch(async () => {
         const hit = await caches.match(req, { ignoreSearch: true });
         if (hit) return hit;
-        if (url.pathname.startsWith('/app')) return caches.match('/app.html');
+        if (url.pathname.startsWith('/admin')) return caches.match('/admin.html');
         return caches.match('/app.html');
       })
     );

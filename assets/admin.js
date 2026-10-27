@@ -1,7 +1,18 @@
 import { sb, $, esc, fmt, fmtPhone, waLink, dateShort, dateTime, subState, PRICE_MONTH, q, errMsg, toast, I, qrBlock } from './core.js';
 
 const root = $('#root');
-const S = { user: null, rows: [], filter: 'tous', search: '' };
+const S = { user: null, rows: [], filter: 'tous', search: '', offline: false, at: null };
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('/sw.js').catch(() => {});
+const isNet = e => !navigator.onLine || /Failed to fetch|NetworkError|Load failed|network|fetch|timeout|ERR_/i.test(String((e && e.message) || e || ''));
+const CK = () => 'pp-admin:' + (S.user ? S.user.id : 'x');
+const cacheGet = () => { try { return JSON.parse(localStorage.getItem(CK()) || 'null'); } catch (e) { return null; } };
+const cacheSet = v => { try { localStorage.setItem(CK(), JSON.stringify(v)); } catch (e) {} };
+function showCached() {
+  const c = cacheGet();
+  if (!c) { root.innerHTML = '<div class="auth"><div class="card stack"><h2>Pas de connexion</h2><p class="hint">L’admin n’a encore jamais été ouvert avec internet sur ce téléphone. Reconnecte-toi une fois pour pouvoir le consulter hors ligne.</p><button class="btn" type="button" data-a="reload">Réessayer</button></div></div>'; return; }
+  S.offline = true; S.at = c.at; S.rows = c.rows; S.rows.forEach(r => { r.ss = subState(r); }); render();
+}
+window.addEventListener('online', () => { if (S.user) load(); });
 
 sb.auth.onAuthStateChange((ev, session) => setTimeout(() => start(session), 0));
 
@@ -10,7 +21,7 @@ async function start(session) {
   if (S.user && S.user.id === session.user.id) return;
   S.user = session.user;
   let ok = false;
-  try { ok = await q(sb.rpc('is_platform_admin')); } catch (e) { ok = false; }
+  try { ok = await q(sb.rpc('is_platform_admin')); } catch (e) { if (isNet(e)) { showCached(); return; } ok = false; }
   if (!ok) {
     root.innerHTML = '<div class="auth"><div class="card stack"><h2>Accès refusé</h2><p class="hint">Le compte ' + esc(S.user.email) + ' n’est pas administrateur de Pressing Pro.</p><button class="btn" id="out" type="button">Se déconnecter</button></div></div>';
     $('#out').onclick = () => sb.auth.signOut();
@@ -35,8 +46,11 @@ function renderLogin() {
 }
 
 async function load() {
-  try { S.rows = await q(sb.rpc('admin_overview')); }
-  catch (e) { root.innerHTML = '<div class="auth"><div class="card"><p class="err">' + esc(errMsg(e)) + '</p></div></div>'; return; }
+  try { S.rows = await q(sb.rpc('admin_overview')); S.offline = false; S.at = new Date().toISOString(); cacheSet({ rows: S.rows, at: S.at }); }
+  catch (e) {
+    if (isNet(e)) { showCached(); return; }
+    root.innerHTML = '<div class="auth"><div class="card"><p class="err">' + esc(errMsg(e)) + '</p></div></div>'; return;
+  }
   S.rows.forEach(r => { r.ss = subState(r); });
   render();
 }
@@ -61,6 +75,7 @@ function render() {
   root.innerHTML = '<div class="adm">' +
     '<div class="adm-top"><span class="logo">' + I.shield + '</span><div class="grow"><div class="brandname">Admin Pressing Pro</div><div class="brandsub">' + esc(S.user.email) + '</div></div>' +
       '<button class="btn sm" type="button" data-a="qr">' + I.qr + ' QR de l’app</button><button class="btn sm" type="button" data-a="reload">Actualiser</button><a class="btn sm" href="app.html">Ouvrir l’app</a><button class="btn sm ghost" type="button" data-a="logout">' + I.logout + ' Déconnexion</button></div>' +
+    (S.offline ? '<div class="banner off" role="status">' + I.wifiOff + '<span style="flex:1"><b>Hors connexion.</b> Chiffres du ' + esc(dateTime(S.at)) + '. Les actions (prolonger, suspendre) reviennent avec le réseau.</span></div>' : '') +
     '<section class="card stack" id="qr-card" hidden style="margin-bottom:14px;align-items:center"><h2 style="font-size:17px">Fais scanner ce code aux gérants de pressing</h2>' + qrBlock(location.origin + '/', 'Ils arrivent sur la présentation de Pressing Pro et peuvent créer leur compte (30 jours gratuits). Fais une capture d’écran pour le partager.') + '</section>' +
     '<section class="hero" style="margin-bottom:14px"><div class="k">Revenu mensuel (abonnés payants)</div><div class="v">' + fmt(mrr) + ' <small>FCFA / mois</small></div>' +
       '<div class="tiles"><div class="tile"><div class="k">Pressings</div><div class="v">' + R.length + '</div></div><div class="tile"><div class="k">Payants</div><div class="v">' + n('active') + '</div></div><div class="tile"><div class="k">En essai</div><div class="v">' + n('trial') + '</div></div></div></section>' +
@@ -111,6 +126,7 @@ document.addEventListener('click', async e => {
     if (a === 'logout') { await sb.auth.signOut(); return; }
     if (a === 'filter') { S.filter = b.dataset.f; document.querySelectorAll('[data-a="filter"]').forEach(x => x.setAttribute('aria-pressed', String(x === b))); return renderList(); }
     if (!r) return;
+    if (S.offline || !navigator.onLine) { toast('Connexion nécessaire pour modifier un abonnement.', 'bad'); return; }
     b.disabled = true;
     if (a === 'add') {
       const m = parseInt(b.dataset.m, 10), d = base(r); d.setMonth(d.getMonth() + m);

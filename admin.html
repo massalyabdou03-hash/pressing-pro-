@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#12305E">
+<title>Admin Pressing Pro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+<style>
+.adm{max-width:1180px;margin:0 auto;padding:16px}
+.adm-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.adm-top .grow{flex:1;min-width:200px}
+.prow{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr) auto;gap:14px;align-items:center;padding:14px 0;border-top:1px solid var(--line)}
+.prow:first-child{border-top:0}
+.prow .nm{font-weight:800;font-size:16px}
+.prow .sub{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.prow .acts{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+.stat{font-size:13px;color:var(--muted)}
+.stat b{color:var(--ink);font-size:15px}
+@media (max-width:820px){.prow{grid-template-columns:1fr 1fr}.prow .acts{grid-column:1/-1;justify-content:flex-start}}
+@media (max-width:480px){.prow{grid-template-columns:1fr}}
+</style>
+<script type="module" src="assets/admin.js"></script>
+</head>
+<body>
+<div id="root"><div class="auth"><p class="muted">Chargement…</p></div></div>
+</body>
+</html>

@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#12305E">
+<title>Pressing Pro · Le logiciel des pressings au Sénégal</title>
+<meta name="description" content="Tickets en 30 secondes, message WhatsApp quand le linge est prêt, caisse Wave et Orange Money. Essai gratuit 30 jours.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+<style>
+body{background:#fff}
+.wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+.lnav{display:flex;align-items:center;gap:12px;padding:16px 0}
+.lnav .sp{flex:1}
+.lhero{background:linear-gradient(170deg,var(--navy),var(--navy-2));color:#fff;padding:56px 0 64px;overflow:hidden}
+.lhero .grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:40px;align-items:center}
+.lhero h1{font-size:clamp(34px,5.4vw,56px);line-height:1.05;letter-spacing:-.035em}
+.lhero h1 em{font-style:normal;color:#F3C55A}
+.lhero p.lead{font-size:18px;color:#C8D6EE;max-width:520px;margin:18px 0 26px}
+.lhero .cta{display:flex;flex-wrap:wrap;gap:10px}
+.lhero .btn.light{background:#fff;color:var(--navy);border-color:#fff}
+.lhero .btn.outline{background:transparent;color:#fff;border-color:rgba(255,255,255,.35)}
+.lhero small{display:block;margin-top:12px;color:#9FB3D6}
+.phone{width:300px;max-width:100%;margin:0 auto;background:#F3F6FA;border-radius:34px;padding:14px;border:8px solid #0A1A33;box-shadow:0 30px 60px rgba(0,0,0,.35);color:var(--ink)}
+.phone .hero{padding:14px;border-radius:16px}
+.phone .hero .v{font-size:26px}
+.phone .li{padding:9px 0;min-height:0}
+.phone .tno{width:44px;height:38px}
+.sec{padding:64px 0}
+.sec h2{font-size:clamp(26px,3.6vw,36px);letter-spacing:-.03em;margin-bottom:10px}
+.sec .intro{color:var(--muted);font-size:17px;max-width:620px;margin:0 0 28px}
+.feats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.feat{border:1px solid var(--line);border-radius:18px;padding:18px;background:#fff}
+.feat .ic{width:42px;height:42px;border-radius:12px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;margin-bottom:10px}
+.feat .ic svg{width:22px;height:22px}
+.feat h3{font-size:17px;margin-bottom:4px}
+.feat p{margin:0;color:var(--muted);font-size:14px}
+.steps3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;counter-reset:s}
+.steps3 div{background:var(--surface-2);border-radius:18px;padding:18px}
+.steps3 div::before{counter-increment:s;content:counter(s);display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--accent);color:#fff;font-weight:800;margin-bottom:10px}
+.steps3 b{display:block;font-size:16px;margin-bottom:4px}
+.steps3 span{color:var(--muted);font-size:14px}
+.price{max-width:460px;border:2px solid var(--accent);border-radius:22px;padding:24px;background:#fff}
+.price .amt{font-size:46px;font-weight:800;letter-spacing:-.03em}
+.price ul{list-style:none;padding:0;margin:16px 0 20px;display:grid;gap:8px}
+.price li{display:flex;gap:8px;align-items:flex-start}
+.price li svg{width:20px;height:20px;color:var(--ok);margin-top:1px}
+.faq details{border-top:1px solid var(--line);padding:14px 0}
+.faq summary{font-weight:800;cursor:pointer;font-size:16px}
+.faq p{color:var(--muted);margin:8px 0 0}
+.lfoot{border-top:1px solid var(--line);padding:28px 0;color:var(--muted);font-size:14px}
+.alt{background:var(--bg)}
+@media (max-width:440px){.lnav .brandname{display:none}.lnav .btn.sm{padding:0 10px}}
+@media (max-width:860px){
+  .lhero .grid{grid-template-columns:1fr}
+  .feats,.steps3{grid-template-columns:1fr}
+}
+@media (min-width:861px) and (max-width:1000px){.feats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>
+</head>
+<body>
+<header class="wrap lnav">
+  <span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7a2 2 0 1 1 2-2c0 1-2 1.5-2 3"/><path d="M12 8L3 15.5c-.8.7-.3 2 .8 2h16.4c1.1 0 1.6-1.3.8-2L12 8z"/></svg></span>
+  <span class="brandname">Pressing Pro</span><span class="sp"></span>
+  <a class="btn sm ghost" href="app.html">Se connecter</a>
+  <a class="btn sm primary" href="app.html#signup">Essai gratuit</a>
+</header>
+
+<section class="lhero">
+  <div class="wrap grid">
+    <div>
+      <h1>Votre pressing, <em>sans cahier</em> ni ticket perdu.</h1>
+      <p class="lead">Un ticket en 30 secondes, un message WhatsApp quand le linge est prêt, la caisse Wave et Orange Money au franc près. Sur votre téléphone, dès aujourd’hui.</p>
+      <div class="cta"><a class="btn light" href="app.html#signup">Essayer 30 jours gratuits</a><a class="btn outline" href="#prix">Voir le prix</a></div>
+      <small>Sans carte bancaire. Sans installation. Fonctionne sur téléphone, tablette et ordinateur.</small>
+    </div>
+    <div aria-hidden="true">
+      <div class="phone">
+        <div class="hero"><div class="k">Encaissé aujourd’hui</div><div class="v">47 500 <small>FCFA</small></div>
+          <div class="tiles"><div class="tile"><div class="k">Dépôts</div><div class="v">12</div></div><div class="tile"><div class="k">Prêts</div><div class="v">7</div></div><div class="tile"><div class="k">À encaisser</div><div class="v">18 000</div></div></div></div>
+        <div class="card" style="margin-top:10px;padding:4px 12px">
+          <div class="li"><span class="tno">#0142</span><span class="mid"><span class="t">Aïssatou D.</span><span class="s" style="display:block">3 chemises · 1 grand boubou</span></span><span class="badge s-pret">Prêt</span></div>
+          <div class="li"><span class="tno">#0141</span><span class="mid"><span class="t">Moussa N.</span><span class="s" style="display:block">1 costume · 2 pantalons</span></span><span class="badge s-lavage">En lavage</span></div>
+          <div class="li"><span class="tno">#0140</span><span class="mid"><span class="t">Fatou S.</span><span class="s" style="display:block">2 draps · 1 couette</span></span><span class="badge s-recu">Reçu</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec">
+  <div class="wrap">
+    <h2>Tout ce qu’il faut au comptoir</h2>
+    <p class="intro">Pensé pour les pressings de Dakar et du Sénégal : vos habits, vos prix, vos clients, votre façon de travailler.</p>
+    <div class="feats">
+      <div class="feat"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg></div><h3>Ticket en 30 secondes</h3><p>Numéro du client, habits en un clic, prix automatiques. Un habit inconnu ? Tapez son nom, il rejoint votre catalogue.</p></div>
+      <div class="feat"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-12.6 7.4L3 20.5l1.6-5.2A8.5 8.5 0 1 1 21 11.5z"/></svg></div><h3>Messages WhatsApp prêts</h3><p>Confirmation du dépôt, « votre linge est prêt », rappel de paiement : un bouton, le message est déjà écrit.</p></div>
+      <div class="feat"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></div><h3>Suivi en ligne pour vos clients</h3><p>Chaque client reçoit un lien et un QR code : il voit où en est son linge sans vous appeler.</p></div>
+      <div class="feat"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg></div><h3>Taches notées au dépôt</h3><p>Tache, trou, bouton manquant : notez-le à la réception. Fini les disputes au moment du retrait.</p></div>
+      <div class="feat"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10h18"/><circle cx="16.5" cy="14.5" r="1.2"/></svg></div><h3>Caisse Wave, OM, espèces</h3><p>Avances, paiements partiels, impayés : vous savez exactement qui doit quoi et ce qui est rentré aujourd’hui.</p></div>
+      <div class="feat"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l2.6 5.3 5.9.8-4.3 4.1 1 5.8L12 16.8l-5.2 2.7 1-5.8-4.3-4.1 5.9-.8z"/></svg></div><h3>Fidélité automatique</h3><p>Une remise tous les 10 dépôts (ou ce que vous voulez), calculée toute seule. Vos clients reviennent.</p></div>
+      <div class="feat"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9V3h10v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/></svg></div><h3>Tickets et étiquettes</h3><p>Impression ticket de caisse 80 mm avec QR code, et une étiquette par habit pour ne rien mélanger.</p></div>
+      <div class="feat"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg></div><h3>Express et livraison</h3><p>Supplément express et frais de livraison ajoutés en un clic, avec la date de retrait.</p></div>
+      <div class="feat"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6.5 6.5 0 0 1 3.5 5.5"/></svg></div><h3>Toute l’équipe</h3><p>Vos employés rejoignent votre pressing avec un code. Le gérant garde la main sur les prix et les réglages.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="sec alt">
+  <div class="wrap">
+    <h2>Prêt en 3 minutes</h2>
+    <p class="intro">Pas de formation, pas de matériel à acheter.</p>
+    <div class="steps3">
+      <div><b>Créez votre compte</b><span>Email et mot de passe, puis le nom de votre pressing.</span></div>
+      <div><b>Ajustez vos prix</b><span>Un catalogue d’habits est déjà prêt : chemise, boubou, bazin, drap… changez simplement les prix.</span></div>
+      <div><b>Faites votre premier ticket</b><span>Le client reçoit sa confirmation sur WhatsApp avec son lien de suivi.</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="prix">
+  <div class="wrap">
+    <h2>Un prix simple</h2>
+    <p class="intro">Tout est inclus. Pas de frais cachés.</p>
+    <div class="price">
+      <div class="lbl">Abonnement mensuel</div>
+      <div class="amt"><span id="price">5 000</span> <span style="font-size:18px;color:var(--muted)">FCFA / mois</span></div>
+      <ul>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>30 jours d’essai gratuit</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Tickets, clients et employés illimités</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Messages WhatsApp et suivi client</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Paiement par Wave ou Orange Money</li>
+      </ul>
+      <a class="btn primary block" href="app.html#signup">Commencer l’essai gratuit</a>
+    </div>
+  </div>
+</section>
+
+<section class="sec alt">
+  <div class="wrap faq" style="max-width:760px">
+    <h2>Questions fréquentes</h2>
+    <details><summary>Faut-il un ordinateur ?</summary><p>Non. Un téléphone avec internet suffit. Ça marche aussi sur tablette et ordinateur.</p></details>
+    <details><summary>Faut-il une imprimante ?</summary><p>Non. Le ticket peut partir sur WhatsApp. Si vous avez une imprimante de tickets 80 mm, vous pouvez aussi l’imprimer.</p></details>
+    <details><summary>Mes données sont-elles protégées ?</summary><p>Oui. Chaque pressing ne voit que ses propres tickets et clients, et l’accès se fait avec votre mot de passe.</p></details>
+    <details><summary>Que se passe-t-il après l’essai ?</summary><p>Vous payez 5 000 FCFA par mois par Wave ou Orange Money. Sans paiement, vos données restent consultables mais vous ne pouvez plus créer de ticket.</p></details>
+  </div>
+</section>
+
+<footer class="lfoot"><div class="wrap hstack" style="justify-content:space-between">
+  <span>© Pressing Pro · Fait à Dakar</span><span id="contact"></span>
+</div></footer>
+<script type="module">
+import { SUPPORT_PHONE, PRICE_MONTH } from './assets/config.js';
+document.getElementById('price').textContent = new Intl.NumberFormat('fr-FR').format(PRICE_MONTH).replace(/[  ]/g, ' ');
+if (SUPPORT_PHONE) {
+  const d = SUPPORT_PHONE.replace(/\D/g, ''), n = d.length === 9 ? '221' + d : d;
+  document.getElementById('contact').innerHTML = '<a href="https://wa.me/' + n + '?text=' + encodeURIComponent('Bonjour, je veux en savoir plus sur Pressing Pro.') + '" target="_blank" rel="noopener">Nous écrire sur WhatsApp</a>';
+}
+</script>
+</body>
+</html>

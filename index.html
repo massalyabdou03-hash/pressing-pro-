@@ -167,7 +167,7 @@ body{background:#fff}
 <footer class="lfoot"><div class="wrap hstack" style="justify-content:space-between">
   <span>© Pressing Pro · Fait à Dakar</span><span id="contact"></span>
 </div></footer>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="/assets/vendor/qrcode.js"></script>
 <script type="module">
 import { SUPPORT_PHONE, PRICE_MONTH } from './assets/config.js';
 try { const q = qrcode(0, 'M'); q.addData(location.origin + '/app.html'); q.make(); document.getElementById('qr-app').src = q.createDataURL(6, 1); } catch (e) { const d = document.querySelector('.qr-desk'); if (d) d.remove(); }

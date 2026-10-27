@@ -1,4 +1,5 @@
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/+esm';
+// Librairie Supabase hébergée sur le site (assets/vendor/supabase.js) : disponible même hors connexion
+const { createClient } = window.supabase;
 import { SUPABASE_URL, SUPABASE_KEY, SUPPORT_PHONE, PRICE_MONTH, TRACK_BASE } from './config.js';
 
 export const sb = createClient(SUPABASE_URL, SUPABASE_KEY, {

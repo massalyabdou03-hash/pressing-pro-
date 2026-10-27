@@ -3,7 +3,7 @@
    - Fichiers du site : copie locale tout de suite, mise à jour en arrière-plan.
    - Librairies et polices (CDN) : copie locale d'abord.
    - Données (Supabase) : jamais mises en cache ici, l'app gère sa propre file d'attente. */
-const VERSION = 'pp-v2';
+const VERSION = 'pp-v3';
 const CORE = [
   '/app.html',
   '/assets/style.css',
@@ -19,8 +19,10 @@ const CORE = [
   '/assets/icons/admin.svg',
   '/assets/icons/admin-192.png',
   '/admin.webmanifest',
-  'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js',
-  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/+esm'
+  '/suivi.html',
+  '/assets/vendor/qrcode.js',
+  '/assets/vendor/supabase.js',
+  '/assets/vendor/591.supabase.js'
 ];
 
 self.addEventListener('install', event => {

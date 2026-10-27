@@ -8,4 +8,4 @@ export const TRIAL_DAYS = 30;
 
 // Ton numéro (WhatsApp / Wave) pour que les pressings te paient et te contactent.
 // Format : 9 chiffres sénégalais, ex. '771234567'. Laisse vide tant que tu ne veux pas l'afficher.
-export const SUPPORT_PHONE = '';
+export const SUPPORT_PHONE = '770338030';

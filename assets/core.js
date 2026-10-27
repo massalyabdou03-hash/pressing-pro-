@@ -97,7 +97,7 @@ export function toast(msg, kind = '') {
 /* ---------- icônes (trait, 24px) ---------- */
 const sv = p => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>';
 export const I = {
-  logo: sv('<path d="M12 7a2 2 0 1 1 2-2c0 1-2 1.5-2 3"/><path d="M12 8L3 15.5c-.8.7-.3 2 .8 2h16.4c1.1 0 1.6-1.3.8-2L12 8z"/>'),
+  logo: '<svg viewBox="0 0 64 64" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M32 27.5c0-3.6 5.2-4.2 5.2-8.3a5.2 5.2 0 1 0-10.4 0"/><path d="M32 27.5 13.4 41.2c-2 1.5-.9 4.6 1.6 4.6h34c2.5 0 3.6-3.1 1.6-4.6L32 27.5z"/><path d="M47.5 9.5l1.4 3.6 3.6 1.4-3.6 1.4-1.4 3.6-1.4-3.6-3.6-1.4 3.6-1.4z" fill="#F3C55A" stroke="none"/></svg>',
   ticket: sv('<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>'),
   plus: sv('<path d="M12 5v14M5 12h14"/>'),
   users: sv('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6.5 6.5 0 0 1 3.5 5.5"/>'),

@@ -113,8 +113,9 @@ textarea.inp{padding:10px 13px;min-height:72px;resize:vertical}
 /* coque applicative */
 .shell{min-height:100vh;padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
 .topbar{display:flex;align-items:center;gap:12px;padding:16px max(16px,env(safe-area-inset-left,0px)) 8px;max-width:1080px;margin:0 auto}
-.logo{flex:none;width:42px;height:42px;border-radius:13px;background:var(--accent);color:#fff;display:grid;place-items:center}
-.logo svg{width:23px;height:23px}
+.logo{flex:none;width:42px;height:42px;border-radius:11px;background:linear-gradient(135deg,#2A63C9,#12305E);color:#fff;display:grid;place-items:center}
+.logo svg{width:42px;height:42px}
+.logo-img{flex:none;width:42px;height:42px;border-radius:11px;display:block}
 .brandname{font-weight:800;font-size:18px;letter-spacing:-.02em;line-height:1.15}
 .brandsub{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .main{max-width:1080px;margin:0 auto;padding:8px 16px 24px}

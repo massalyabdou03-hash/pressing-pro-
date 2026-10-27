@@ -1,7 +1,7 @@
 import {
   sb, $, esc, fmt, money, digits, fmtPhone, waLink, todayIso, addDaysIso, dayLabel, dateTime, dateShort,
   ticketNo, startOfDay, STATUS, STEPS, METHODS, DEFECTS, CATEGORIES, subState, supportLink, PRICE_MONTH,
-  q, errMsg, toast, I, qrBlock
+  q, errMsg, toast, I, qrBlock, TRACK_BASE
 } from './core.js';
 
 /* =========================================================
@@ -26,7 +26,7 @@ const initials = n => String(n || '?').trim().split(/\s+/).slice(0, 2).map(w => 
 const firstName = n => String(n || '').trim().split(/\s+/)[0] || '';
 const parseAmt = v => parseInt(digits(v) || '0', 10);
 const trackUrl = o => o.track_code
-  ? location.origin + '/t/' + o.track_code
+  ? (TRACK_BASE || location.origin) + '/t/' + o.track_code
   : new URL('suivi.html', location.href.split('#')[0]).href + '?t=' + o.track_token;
 const uid = () => Math.random().toString(36).slice(2, 9);
 
@@ -642,33 +642,17 @@ async function viewTicket(seq, id, params) {
 function msgs(o) {
   const p = S.pressing, st = settings(), c = o.customers || {}, rest = o.total - o.paid;
   const prenom = firstName(c.name);
-  const hi = 'Bonjour' + (prenom ? ' ' + prenom : '') + ',';
-  const no = 'n° ' + String(o.number).padStart(4, '0');
-  const lines = o.order_items.map(i => '• ' + i.qty + ' × ' + i.name + ' : ' + fmt(i.qty * i.unit_price) + ' F').join('\n');
-  const extra = o.total - o.subtotal - o.delivery_fee + o.discount;
-  const money2 = n => fmt(n) + ' FCFA';
-  const link = trackUrl(o);
-  const safe = 'Ce lien est sûr : il affiche seulement votre ticket. Nous ne vous demanderons jamais de mot de passe, de code ni de paiement par ce lien.';
-  const where = p.name + (p.address ? ', ' + p.address : '') + (st.hours ? ' (ouvert ' + st.hours + ')' : '');
+  const hi = 'Bonjour' + (prenom ? ' ' + prenom : '');
+  const no = '*Ticket n° ' + String(o.number).padStart(4, '0') + '*';
+  const n = o.order_items.reduce((s, i) => s + i.qty, 0);
+  const due = o.due_at ? new Date(o.due_at + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' }) : '';
+  const pay = rest > 0 ? 'reste ' + fmt(rest) + ' F' : 'payé';
   return {
-    confirm:
-      '*' + p.name + '*\n' + hi + ' merci pour votre confiance !\n\n' +
-      '*Ticket ' + no + '*, déposé le ' + dateShort(o.created_at) + '\n' + lines + '\n' +
-      (extra > 0 ? 'Express : +' + fmt(extra) + ' F\n' : '') +
-      (o.delivery_fee ? 'Livraison : +' + fmt(o.delivery_fee) + ' F\n' : '') +
-      (o.discount ? 'Remise fidélité : −' + fmt(o.discount) + ' F\n' : '') +
-      'Total : *' + money2(o.total) + '*\n' +
-      (o.paid > 0 ? 'Déjà payé : ' + money2(o.paid) + ' · Reste : *' + money2(rest) + '*\n' : '') +
-      (o.due_at ? 'Prêt le *' + dayLabel(o.due_at) + '*\n' : '') +
-      '\nSuivez votre linge en direct :\n' + link + '\n\n' + safe,
-    ready:
-      hi + ' bonne nouvelle : votre linge est *prêt* !\n\n' +
-      '*Ticket ' + no + '* : ' + itemsSummary(o.order_items) + '\n' +
-      (rest > 0 ? 'Reste à payer : *' + money2(rest) + '* (espèces, Wave ou Orange Money)\n' : 'Tout est déjà payé.\n') +
-      '\nNous vous attendons au ' + where + '.\n\nVotre ticket :\n' + link + '\n\n' + safe,
-    remind:
-      hi + ' petit rappel du ' + p.name + ' : il reste *' + money2(rest) + '* à régler pour le *ticket ' + no + '*.\n' +
-      'Paiement en espèces, Wave ou Orange Money à votre passage.\n\nVotre ticket :\n' + link + '\n\n' + safe + '\n\nMerci !'
+    confirm: hi + ', votre linge est bien reçu ✅\n' + no + ' · ' + n + ' pièce' + (n > 1 ? 's' : '') + ' · ' + p.name + '\n' +
+      'Total ' + fmt(o.total) + ' F · ' + pay + (due ? ' · prêt ' + due : '') + '\n' +
+      'Suivi sécurisé : ' + trackUrl(o),
+    ready: hi + ', votre linge est prêt ✅\n' + no + ' · ' + pay + '\n' + p.name + (st.hours ? ', ouvert ' + st.hours : ''),
+    remind: hi + ', petit rappel : ' + fmt(rest) + ' F à régler pour le ' + no.replace('Ticket', 'ticket') + ' (' + p.name + '). Merci !'
   };
 }
 function renderTicket(isNew) {

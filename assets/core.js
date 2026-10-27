@@ -1,5 +1,5 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/+esm';
-import { SUPABASE_URL, SUPABASE_KEY, SUPPORT_PHONE, PRICE_MONTH } from './config.js';
+import { SUPABASE_URL, SUPABASE_KEY, SUPPORT_PHONE, PRICE_MONTH, TRACK_BASE } from './config.js';
 
 export const sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
@@ -57,7 +57,7 @@ export function subState(p) {
   return { k: 'active', days, l: 'Actif' };
 }
 export const supportLink = text => SUPPORT_PHONE ? waLink(SUPPORT_PHONE, text) : '';
-export { PRICE_MONTH, SUPPORT_PHONE };
+export { PRICE_MONTH, SUPPORT_PHONE, TRACK_BASE };
 
 /* ---------- erreurs ---------- */
 export async function q(promise) {

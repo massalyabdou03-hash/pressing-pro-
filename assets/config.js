@@ -1,5 +1,8 @@
 // Réglages publics de Pressing Pro (ces clés sont faites pour être visibles dans le navigateur).
 export const SUPABASE_URL = 'https://umfbdrvxbdteycxxndxg.supabase.co';
+// Adresse courte utilisée dans les liens de suivi envoyés aux clients (et les QR codes)
+export const TRACK_BASE = 'https://pressingsn.vercel.app';
+
 export const SUPABASE_KEY = 'sb_publishable_WwRUdy30kvYUxCl6RMxFTg_X3cBlkTv';
 
 // Abonnement

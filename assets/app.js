@@ -393,7 +393,7 @@ function renderNew() {
         '<button class="btn primary" type="button" data-act="nw-additem">Ajouter</button></div><div id="nw-sugg-item"></div></div>' +
       '<p class="hint">Un habit qui n’est pas dans la liste ? Tape son nom, ajoute-le, puis indique le prix.</p>' +
       '<div class="chips scroll" role="group" aria-label="Catégories">' + cats.map(c => '<button type="button" class="chip sm" data-act="nw-cat" data-c="' + esc(c) + '" aria-pressed="' + (S.newCat === c) + '">' + esc(c) + '</button>').join('') + '</div>' +
-      '<div class="catgrid">' + (types.length ? types.map(t => '<button type="button" class="catbtn" data-act="nw-addtype" data-id="' + t.id + '"><b>' + esc(t.name) + '</b><span>' + fmt(t.price) + ' F</span></button>').join('') : '<p class="hint">Catalogue vide : ajoute tes habits dans Réglages.</p>') + '</div>' +
+      '<div class="catgrid">' + (types.length ? types.map(catBtn).join('') : '<p class="hint">Catalogue vide : ajoute tes habits dans Réglages.</p>') + '</div>' +
       '<div id="nw-lines"></div></section>' +
     '<section class="card stack" aria-labelledby="nw-o-t"><div class="sec-t" id="nw-o-t">Options et paiement</div>' +
       '<div class="chips">' +
@@ -405,8 +405,26 @@ function renderNew() {
       '<div class="field"><label for="nw-notes">Note (facultatif)</label><textarea class="inp" id="nw-notes" data-in="nw-notes" maxlength="500" placeholder="Ex. sans amidon, livrer à Ouakam…">' + esc(d.notes) + '</textarea></div>' +
       '<label class="hstack" style="font-size:14px;font-weight:600"><input type="checkbox" data-ch="nw-savenew"' + (d.saveNew ? ' checked' : '') + ' style="width:20px;height:20px"> Ajouter les nouveaux habits au catalogue</label>' +
     '</section></div>' +
-    '<div><section class="card stack sumbar" id="nw-sum" aria-label="Total"></section></div></div>';
+    '<div><section class="card stack sumbar" id="nw-sum" aria-label="Total"></section></div></div>' +
+    '<div class="nw-spacer"></div><div class="nw-bar" id="nw-bar" hidden></div>';
   renderLines(); renderSum();
+}
+const qtyOf = name => S.draft.lines.filter(l => l.name.toLowerCase() === name.toLowerCase()).reduce((s, l) => s + l.qty, 0);
+function catBtn(t) {
+  const n = qtyOf(t.name);
+  return '<button type="button" class="catbtn' + (n ? ' on' : '') + '" data-act="nw-addtype" data-id="' + t.id + '" aria-label="' + esc(t.name) + ', ' + fmt(t.price) + ' francs' + (n ? ', ' + n + ' dans ce dépôt' : '') + '">' +
+    '<b>' + esc(t.name) + '</b><span>' + fmt(t.price) + ' F</span>' + (n ? '<i class="cnt" aria-hidden="true">' + n + '</i>' : '') + '</button>';
+}
+function syncCatBtns() {
+  document.querySelectorAll('.catbtn[data-id]').forEach(b => {
+    const t = S.types.find(x => x.id === b.dataset.id); if (!t) return;
+    const n = qtyOf(t.name);
+    b.classList.toggle('on', n > 0);
+    let c = b.querySelector('.cnt');
+    if (n && !c) { c = document.createElement('i'); c.className = 'cnt'; c.setAttribute('aria-hidden', 'true'); b.appendChild(c); }
+    if (c) { if (n) c.textContent = n; else c.remove(); }
+    b.setAttribute('aria-label', t.name + ', ' + fmt(t.price) + ' francs' + (n ? ', ' + n + ' dans ce dépôt' : ''));
+  });
 }
 function custInfo() {
   const d = S.draft, st = settings();
@@ -430,6 +448,7 @@ function renderLines() {
   const d = S.draft;
   const n = d.lines.reduce((s, l) => s + l.qty, 0);
   const c = $('#nw-count'); if (c) c.textContent = n ? n + ' pièce' + (n > 1 ? 's' : '') : '';
+  syncCatBtns();
   if (!d.lines.length) { box.innerHTML = ''; return; }
   box.innerHTML = '<div class="sec-t" style="margin:6px 0 2px">Dans ce dépôt</div>' + d.lines.map(l =>
     '<div class="cart-line">' +
@@ -471,7 +490,15 @@ function renderSum() {
     '<button class="btn primary block" type="button" data-act="nw-submit"' + (d.lines.length ? '' : ' disabled') + '>' + I.ticket + ' Créer le ticket</button>' +
     (t.total > 0 && t.rest > 0 ? '<button class="btn sm ghost" type="button" data-act="nw-fullpay">Le client paie tout maintenant</button>' : '') +
     '<p class="hint">Prêt le ' + esc(dayLabel(d.due)) + '.</p>';
+  const bar = $('#nw-bar');
+  if (bar) {
+    const n = d.lines.reduce((s, l) => s + l.qty, 0);
+    bar.hidden = !n;
+    bar.innerHTML = n ? '<div style="flex:1;min-width:0"><b>' + n + ' pièce' + (n > 1 ? 's' : '') + '</b> · ' + fmt(t.total) + ' FCFA<div style="font-size:12px;opacity:.8">' + esc(d.lines.map(l => l.qty + ' ' + l.name.toLowerCase()).join(', ')) + '</div></div>' +
+      '<button type="button" class="btn sm" data-act="nw-gosum">Valider</button>' : '';
+  }
 }
+H['nw-gosum'] = () => { const s = $('#nw-sum'); if (s) s.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
 function addLine(name, price) {
   name = name.trim().replace(/\s+/g, ' ').slice(0, 60);
   if (!name) return;
@@ -485,7 +512,12 @@ function addLine(name, price) {
 }
 const findLine = k => S.draft.lines.find(l => l.k === k);
 H['nw-cat'] = t => { S.newCat = t.dataset.c; renderNew(); };
-H['nw-addtype'] = t => { const ty = S.types.find(x => x.id === t.dataset.id); if (ty) addLine(ty.name, ty.price); };
+H['nw-addtype'] = t => {
+  const ty = S.types.find(x => x.id === t.dataset.id); if (!ty) return;
+  addLine(ty.name, ty.price);
+  t.classList.remove('pop'); void t.offsetWidth; t.classList.add('pop');
+  if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) {} }
+};
 function addFromInput() {
   const inp = $('#nw-item'); if (!inp) return;
   const v = inp.value.trim(); if (!v) { inp.focus(); return; }

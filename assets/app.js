@@ -25,7 +25,9 @@ const isOwner = () => S.member && S.member.role === 'owner';
 const initials = n => String(n || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase() || '?';
 const firstName = n => String(n || '').trim().split(/\s+/)[0] || '';
 const parseAmt = v => parseInt(digits(v) || '0', 10);
-const trackUrl = token => new URL('suivi.html', location.href.split('#')[0]).href + '?t=' + token;
+const trackUrl = o => o.track_code
+  ? location.origin + '/t/' + o.track_code
+  : new URL('suivi.html', location.href.split('#')[0]).href + '?t=' + o.track_token;
 const uid = () => Math.random().toString(36).slice(2, 9);
 
 /* =========================================================
@@ -604,13 +606,34 @@ async function viewTicket(seq, id, params) {
 }
 function msgs(o) {
   const p = S.pressing, st = settings(), c = o.customers || {}, rest = o.total - o.paid;
-  const hi = 'Bonjour ' + (firstName(c.name) || '') + ',';
+  const prenom = firstName(c.name);
+  const hi = 'Bonjour' + (prenom ? ' ' + prenom : '') + ',';
+  const no = 'n° ' + String(o.number).padStart(4, '0');
+  const lines = o.order_items.map(i => '• ' + i.qty + ' × ' + i.name + ' : ' + fmt(i.qty * i.unit_price) + ' F').join('\n');
+  const extra = o.total - o.subtotal - o.delivery_fee + o.discount;
+  const money2 = n => fmt(n) + ' FCFA';
+  const link = trackUrl(o);
+  const safe = 'Ce lien est sûr : il affiche seulement votre ticket. Nous ne vous demanderons jamais de mot de passe, de code ni de paiement par ce lien.';
+  const where = p.name + (p.address ? ', ' + p.address : '') + (st.hours ? ' (ouvert ' + st.hours + ')' : '');
   return {
-    confirm: hi + ' nous avons bien reçu votre linge au ' + p.name + '.\nTicket ' + ticketNo(o.number) + ' : ' + itemsSummary(o.order_items) + '.\nTotal : ' + money(o.total) +
-      (o.paid > 0 ? ' (déjà payé : ' + money(o.paid) + ')' : '') + '.' + (o.due_at ? '\nPrêt le ' + dayLabel(o.due_at) + '.' : '') + '\nSuivez votre linge ici : ' + trackUrl(o.track_token),
-    ready: hi + ' bonne nouvelle : votre linge (ticket ' + ticketNo(o.number) + ') est prêt !' + (rest > 0 ? '\nReste à payer : ' + money(rest) + '.' : '') +
-      '\nNous vous attendons au ' + p.name + (st.hours ? ', ouvert ' + st.hours : '') + '.' + (p.address ? '\nAdresse : ' + p.address : ''),
-    remind: hi + ' petit rappel : il reste ' + money(rest) + ' à régler pour le ticket ' + ticketNo(o.number) + ' au ' + p.name + '. Paiement en espèces, Wave ou Orange Money. Merci !'
+    confirm:
+      '*' + p.name + '*\n' + hi + ' merci pour votre confiance !\n\n' +
+      '*Ticket ' + no + '*, déposé le ' + dateShort(o.created_at) + '\n' + lines + '\n' +
+      (extra > 0 ? 'Express : +' + fmt(extra) + ' F\n' : '') +
+      (o.delivery_fee ? 'Livraison : +' + fmt(o.delivery_fee) + ' F\n' : '') +
+      (o.discount ? 'Remise fidélité : −' + fmt(o.discount) + ' F\n' : '') +
+      'Total : *' + money2(o.total) + '*\n' +
+      (o.paid > 0 ? 'Déjà payé : ' + money2(o.paid) + ' · Reste : *' + money2(rest) + '*\n' : '') +
+      (o.due_at ? 'Prêt le *' + dayLabel(o.due_at) + '*\n' : '') +
+      '\nSuivez votre linge en direct :\n' + link + '\n\n' + safe,
+    ready:
+      hi + ' bonne nouvelle : votre linge est *prêt* !\n\n' +
+      '*Ticket ' + no + '* : ' + itemsSummary(o.order_items) + '\n' +
+      (rest > 0 ? 'Reste à payer : *' + money2(rest) + '* (espèces, Wave ou Orange Money)\n' : 'Tout est déjà payé.\n') +
+      '\nNous vous attendons au ' + where + '.\n\nVotre ticket :\n' + link + '\n\n' + safe,
+    remind:
+      hi + ' petit rappel du ' + p.name + ' : il reste *' + money2(rest) + '* à régler pour le *ticket ' + no + '*.\n' +
+      'Paiement en espèces, Wave ou Orange Money à votre passage.\n\nVotre ticket :\n' + link + '\n\n' + safe + '\n\nMerci !'
   };
 }
 function renderTicket(isNew) {
@@ -627,7 +650,7 @@ function renderTicket(isNew) {
       '<div class="grow"><h1>Ticket ' + ticketNo(o.number) + '</h1><div class="muted" style="font-size:13px">Déposé le ' + esc(dateTime(o.created_at)) + '</div></div>' +
       '<span class="badge ' + st.c + '" style="font-size:13px">' + st.l + '</span></div>' +
     (isNew ? '<div class="card stack" style="border-color:var(--ok);margin-bottom:14px"><div class="hstack"><span class="badge b-ok">' + I.check + ' Ticket créé</span><span class="muted">Envoie la confirmation et imprime le ticket.</span></div>' +
-      '<div class="hstack">' + (wa('confirm', 'Envoyer la confirmation', 'wa') || '<span class="hint">Pas de numéro : pas de message WhatsApp.</span>') +
+      '<div class="hstack">' + (wa('confirm', 'Envoyer le ticket sur WhatsApp', 'wa') || '<span class="hint">Pas de numéro : utilise « Partager ».</span>') + '<button class="btn" type="button" data-act="tk-share">' + I.link + ' Partager</button>' +
       '<button class="btn" type="button" data-act="tk-print">' + I.print + ' Imprimer le ticket</button><a class="btn ghost" href="#/new">' + I.plus + ' Dépôt suivant</a></div></div>' : '') +
     '<div class="two-col"><div class="stack">' +
     '<section class="card stack">' +
@@ -655,10 +678,10 @@ function renderTicket(isNew) {
     '</section></div>' +
     '<div class="stack">' +
     '<section class="card stack"><h2 style="font-size:17px">Prévenir le client</h2>' +
-      (phone ? '<div class="stack" style="gap:8px">' + wa('ready', 'Linge prêt', o.status === 'pret' ? 'wa' : '') + wa('confirm', 'Confirmation du dépôt') + (rest > 0 ? wa('remind', 'Rappel de paiement') : '') + '</div>'
+      (phone ? '<div class="stack" style="gap:8px">' + wa('ready', 'Linge prêt', o.status === 'pret' ? 'wa' : '') + wa('confirm', 'Envoyer le ticket') + (rest > 0 ? wa('remind', 'Rappel de paiement') : '') + '</div>'
              : '<p class="hint">Ajoute un numéro au client pour lui écrire sur WhatsApp.</p>') +
-      '<button class="btn ghost" type="button" data-act="tk-copylink">' + I.link + ' Copier le lien de suivi</button>' +
-      '<p class="hint">Le client suit son linge en ligne avec ce lien, sans application.</p></section>' +
+      '<div class="hstack"><button class="btn ghost" type="button" data-act="tk-share">' + I.link + ' Partager (SMS, autre)</button><button class="btn ghost" type="button" data-act="tk-copylink">Copier le lien</button></div>' +
+      '<p class="hint">Le message contient le ticket complet et le lien de suivi <b>' + esc(trackUrl(o).replace(/^https?:\/\//, '')) + '</b>.</p></section>' +
     '<section class="card stack"><h2 style="font-size:17px">Imprimer</h2><div class="hstack">' +
       '<button class="btn" type="button" data-act="tk-print">' + I.print + ' Ticket client</button>' +
       '<button class="btn" type="button" data-act="tk-labels">' + I.tag + ' Étiquettes (' + o.order_items.reduce((s, i) => s + i.qty, 0) + ')</button></div>' +
@@ -696,8 +719,13 @@ H['tk-prev'] = t => { if (!needWrite()) return; const i = STEPS.indexOf(CUR.stat
 H['tk-cancel'] = t => { if (!needWrite()) return; if (confirm('Annuler le ticket ' + ticketNo(CUR.number) + ' ?')) busy(t, async () => { await setStatus('annule'); renderTicket(false); }); };
 HC['tk-due'] = t => { if (!needWrite()) return; busy(null, async () => { await q(sb.from('orders').update({ due_at: t.value || null }).eq('id', CUR.id)); CUR.due_at = t.value || null; S.orders = null; toast('Date enregistrée', 'ok'); }); };
 HC['tk-notes'] = t => { if (!needWrite()) return; busy(null, async () => { await q(sb.from('orders').update({ notes: t.value.slice(0, 500) }).eq('id', CUR.id)); CUR.notes = t.value; toast('Note enregistrée', 'ok'); }); };
+H['tk-share'] = async () => {
+  const text = msgs(CUR).confirm.replace(/\*/g, '');
+  if (navigator.share) { try { await navigator.share({ title: 'Ticket ' + ticketNo(CUR.number), text }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+  try { await navigator.clipboard.writeText(text); toast('Ticket copié : colle-le dans le message', 'ok'); } catch (e) { prompt('Ticket à envoyer :', text); }
+};
 H['tk-copylink'] = async () => {
-  const url = trackUrl(CUR.track_token);
+  const url = trackUrl(CUR);
   try { await navigator.clipboard.writeText(url); toast('Lien copié', 'ok'); } catch (e) { prompt('Lien de suivi :', url); }
 };
 function openPay(thenPickup) {
@@ -744,7 +772,7 @@ H['tk-print'] = () => {
     (o.discount ? '<div class="l"><span>Remise fidélité</span><span>−' + fmt(o.discount) + '</span></div>' : '') +
     '<div class="l" style="font-size:15px;font-weight:800"><span>TOTAL</span><span>' + money(o.total) + '</span></div>' +
     '<div class="l"><span>Payé</span><span>' + fmt(o.paid) + '</span></div><div class="l" style="font-weight:800"><span>Reste</span><span>' + fmt(rest) + '</span></div><hr>' +
-    '<div class="c">Suivez votre linge :</div><div class="qr">' + qrImg(trackUrl(o.track_token)) + '</div>' +
+    '<div class="c">Suivez votre linge :</div><div class="qr">' + qrImg(trackUrl(o)) + '</div><div class="c" style="font-size:11px">' + esc(trackUrl(o).replace(/^https?:\/\//, '')) + '</div>' +
     '<div class="c" style="margin-top:6px">Présentez ce ticket au retrait. Merci !</div></div>';
   setTimeout(() => window.print(), 50);
 };

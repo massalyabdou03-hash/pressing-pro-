@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    { "source": "/t/:code", "destination": "/suivi.html" }
+  ],
+  "headers": [
+    { "source": "/admin.html", "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }] }
+  ]
+}

@@ -82,6 +82,18 @@ export function errMsg(e) {
   return m;
 }
 
+/* ---------- QR code ---------- */
+export function qrDataUrl(text, cell = 8) {
+  try { const qr = window.qrcode(0, 'M'); qr.addData(text); qr.make(); return qr.createDataURL(cell, 2); }
+  catch (e) { return ''; }
+}
+export function qrBlock(url, caption) {
+  const src = qrDataUrl(url);
+  if (!src) return '<p class="hint">QR code indisponible (connexion ?).</p>';
+  return '<div class="qrbox"><img src="' + src + '" alt="QR code vers ' + esc(url) + '" width="240" height="240">' +
+    '<div class="qrurl">' + esc(url.replace(/^https?:\/\//, '')) + '</div>' + (caption ? '<p class="hint" style="text-align:center">' + caption + '</p>' : '') + '</div>';
+}
+
 /* ---------- toast ---------- */
 let toastT = null;
 export function toast(msg, kind = '') {
@@ -119,5 +131,6 @@ export const I = {
   shield: sv('<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>'),
   chev: sv('<path d="M9 5l7 7-7 7"/>'),
   clock: sv('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
+  qr: sv('<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 17h4v4h-4"/>'),
   link: sv('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>')
 };

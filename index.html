@@ -56,6 +56,10 @@ body{background:#fff}
 .faq p{color:var(--muted);margin:8px 0 0}
 .lfoot{border-top:1px solid var(--line);padding:28px 0;color:var(--muted);font-size:14px}
 .alt{background:var(--bg)}
+.qr-desk{display:none;align-items:center;gap:14px;margin-top:22px;color:#C8D6EE;font-size:14px}
+.qr-desk img{width:96px;height:96px;border-radius:10px;background:#fff;padding:5px;image-rendering:pixelated}
+.qr-desk b{color:#fff}
+@media (min-width:861px){.qr-desk{display:flex}}
 @media (max-width:440px){.lnav .brandname{display:none}.lnav .btn.sm{padding:0 10px}}
 @media (max-width:860px){
   .lhero .grid{grid-template-columns:1fr}
@@ -79,6 +83,7 @@ body{background:#fff}
       <p class="lead">Un ticket en 30 secondes, un message WhatsApp quand le linge est prêt, la caisse Wave et Orange Money au franc près. Sur votre téléphone, dès aujourd’hui.</p>
       <div class="cta"><a class="btn light" href="app.html#signup">Essayer 30 jours gratuits</a><a class="btn outline" href="#prix">Voir le prix</a></div>
       <small>Sans carte bancaire. Sans installation. Fonctionne sur téléphone, tablette et ordinateur.</small>
+      <div class="qr-desk"><img id="qr-app" alt="QR code pour ouvrir Pressing Pro sur votre téléphone" width="96" height="96"><div><b>Sur ordinateur ?</b><br>Scannez avec votre téléphone pour ouvrir l’app.</div></div>
     </div>
     <div aria-hidden="true">
       <div class="phone">
@@ -155,8 +160,10 @@ body{background:#fff}
 <footer class="lfoot"><div class="wrap hstack" style="justify-content:space-between">
   <span>© Pressing Pro · Fait à Dakar</span><span id="contact"></span>
 </div></footer>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script type="module">
 import { SUPPORT_PHONE, PRICE_MONTH } from './assets/config.js';
+try { const q = qrcode(0, 'M'); q.addData(location.origin + '/app.html'); q.make(); document.getElementById('qr-app').src = q.createDataURL(6, 1); } catch (e) { const d = document.querySelector('.qr-desk'); if (d) d.remove(); }
 document.getElementById('price').textContent = new Intl.NumberFormat('fr-FR').format(PRICE_MONTH).replace(/[  ]/g, ' ');
 if (SUPPORT_PHONE) {
   const d = SUPPORT_PHONE.replace(/\D/g, ''), n = d.length === 9 ? '221' + d : d;

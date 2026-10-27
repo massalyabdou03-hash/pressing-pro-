@@ -1,7 +1,7 @@
 import {
   sb, $, esc, fmt, money, digits, fmtPhone, waLink, todayIso, addDaysIso, dayLabel, dateTime, dateShort,
   ticketNo, startOfDay, STATUS, STEPS, METHODS, DEFECTS, CATEGORIES, subState, supportLink, PRICE_MONTH,
-  q, errMsg, toast, I
+  q, errMsg, toast, I, qrBlock
 } from './core.js';
 
 /* =========================================================
@@ -651,7 +651,7 @@ function renderTicket(isNew) {
       '<span class="badge ' + st.c + '" style="font-size:13px">' + st.l + '</span></div>' +
     (isNew ? '<div class="card stack" style="border-color:var(--ok);margin-bottom:14px"><div class="hstack"><span class="badge b-ok">' + I.check + ' Ticket créé</span><span class="muted">Envoie la confirmation et imprime le ticket.</span></div>' +
       '<div class="hstack">' + (wa('confirm', 'Envoyer le ticket sur WhatsApp', 'wa') || '<span class="hint">Pas de numéro : utilise « Partager ».</span>') + '<button class="btn" type="button" data-act="tk-share">' + I.link + ' Partager</button>' +
-      '<button class="btn" type="button" data-act="tk-print">' + I.print + ' Imprimer le ticket</button><a class="btn ghost" href="#/new">' + I.plus + ' Dépôt suivant</a></div></div>' : '') +
+      '<button class="btn" type="button" data-act="tk-qr">' + I.qr + ' QR code</button><button class="btn" type="button" data-act="tk-print">' + I.print + ' Imprimer le ticket</button><a class="btn ghost" href="#/new">' + I.plus + ' Dépôt suivant</a></div></div>' : '') +
     '<div class="two-col"><div class="stack">' +
     '<section class="card stack">' +
       '<div class="hstack" style="flex-wrap:nowrap"><span class="avatar">' + esc(initials(c.name)) + '</span>' +
@@ -680,6 +680,7 @@ function renderTicket(isNew) {
     '<section class="card stack"><h2 style="font-size:17px">Prévenir le client</h2>' +
       (phone ? '<div class="stack" style="gap:8px">' + wa('ready', 'Linge prêt', o.status === 'pret' ? 'wa' : '') + wa('confirm', 'Envoyer le ticket') + (rest > 0 ? wa('remind', 'Rappel de paiement') : '') + '</div>'
              : '<p class="hint">Ajoute un numéro au client pour lui écrire sur WhatsApp.</p>') +
+      '<button class="btn" type="button" data-act="tk-qr">' + I.qr + ' QR code à scanner</button>' +
       '<div class="hstack"><button class="btn ghost" type="button" data-act="tk-share">' + I.link + ' Partager (SMS, autre)</button><button class="btn ghost" type="button" data-act="tk-copylink">Copier le lien</button></div>' +
       '<p class="hint">Le message contient le ticket complet et le lien de suivi <b>' + esc(trackUrl(o).replace(/^https?:\/\//, '')) + '</b>.</p></section>' +
     '<section class="card stack"><h2 style="font-size:17px">Imprimer</h2><div class="hstack">' +
@@ -719,6 +720,11 @@ H['tk-prev'] = t => { if (!needWrite()) return; const i = STEPS.indexOf(CUR.stat
 H['tk-cancel'] = t => { if (!needWrite()) return; if (confirm('Annuler le ticket ' + ticketNo(CUR.number) + ' ?')) busy(t, async () => { await setStatus('annule'); renderTicket(false); }); };
 HC['tk-due'] = t => { if (!needWrite()) return; busy(null, async () => { await q(sb.from('orders').update({ due_at: t.value || null }).eq('id', CUR.id)); CUR.due_at = t.value || null; S.orders = null; toast('Date enregistrée', 'ok'); }); };
 HC['tk-notes'] = t => { if (!needWrite()) return; busy(null, async () => { await q(sb.from('orders').update({ notes: t.value.slice(0, 500) }).eq('id', CUR.id)); CUR.notes = t.value; toast('Note enregistrée', 'ok'); }); };
+H['tk-qr'] = () => {
+  openModal('Suivi du ticket ' + ticketNo(CUR.number),
+    qrBlock(trackUrl(CUR), 'Le client ouvre l’appareil photo de son téléphone et vise le code : la page de suivi s’ouvre, sans rien installer.') +
+    '<div class="hstack" style="justify-content:center;margin-top:12px"><button class="btn" type="button" data-act="tk-copylink">Copier le lien</button><button class="btn" type="button" data-act="modal-close">Fermer</button></div>');
+};
 H['tk-share'] = async () => {
   const text = msgs(CUR).confirm.replace(/\*/g, '');
   if (navigator.share) { try { await navigator.share({ title: 'Ticket ' + ticketNo(CUR.number), text }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
@@ -954,13 +960,19 @@ async function viewSettings(seq) {
     '<section class="card stack"><h2 style="font-size:17px">Équipe</h2>' +
       (own ? '<div><div class="lbl">Code pour tes employés</div><div style="font-size:30px;font-weight:800;letter-spacing:.2em">' + esc(p.join_code) + '</div>' +
         '<p class="hint">L’employé crée un compte sur Pressing Pro puis choisit « Rejoindre l’équipe » avec ce code.</p></div>' +
-        '<a class="btn" href="' + esc('https://wa.me/?text=' + encodeURIComponent('Rejoins ' + p.name + ' sur Pressing Pro : ' + new URL('app.html#signup', location.href.split('#')[0]).href + '\nCode équipe : ' + p.join_code)) + '" target="_blank" rel="noopener">' + I.wa + ' Partager le code</a>' : '') +
+        '<a class="btn" href="' + esc('https://wa.me/?text=' + encodeURIComponent('Rejoins ' + p.name + ' sur Pressing Pro : ' + new URL('app.html#signup', location.href.split('#')[0]).href + '\nCode équipe : ' + p.join_code)) + '" target="_blank" rel="noopener">' + I.wa + ' Partager le code</a><button class="btn" type="button" data-act="team-qr">' + I.qr + ' QR code pour l’employé</button>' : '') +
       '<div class="list">' + members.map(m => '<div class="li" style="cursor:default"><span class="avatar">' + esc(initials(m.display_name || '?')) + '</span><span class="mid"><span class="t">' + esc(m.display_name || 'Sans nom') + (m.user_id === S.user.id ? ' (toi)' : '') + '</span><span class="s" style="display:block">' + (m.role === 'owner' ? 'Gérant' : 'Employé') + '</span></span>' +
         (own && m.role === 'staff' ? '<button type="button" class="btn sm ghost danger" data-act="member-del" data-id="' + m.user_id + '">Retirer</button>' : '') + '</div>').join('') + '</div></section>' +
     '<section class="card stack"><h2 style="font-size:17px">Mon compte</h2><p class="muted" style="margin:0">' + esc(S.user.email) + '</p>' +
       '<button class="btn" type="button" data-act="logout">' + I.logout + ' Se déconnecter</button></section>' +
     '</div></div>';
 }
+H['team-qr'] = () => {
+  const p = S.pressing, url = new URL('app.html#signup', location.href.split('#')[0]).href;
+  openModal('Inviter un employé',
+    qrBlock(url, 'L’employé scanne, crée son compte, puis choisit « Rejoindre l’équipe » avec ce code :') +
+    '<div style="text-align:center;font-size:30px;font-weight:800;letter-spacing:.2em;margin-top:4px">' + esc(p.join_code) + '</div>');
+};
 HF['set-pressing'] = (f) => busy(f.querySelector('[type=submit]'), async () => {
   const num = (n, min, max) => Math.max(min, Math.min(max, parseInt(f[n].value, 10) || 0));
   const s = Object.assign({}, settings(), {

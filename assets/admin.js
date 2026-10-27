@@ -1,4 +1,4 @@
-import { sb, $, esc, fmt, fmtPhone, waLink, dateShort, dateTime, subState, PRICE_MONTH, q, errMsg, toast, I } from './core.js';
+import { sb, $, esc, fmt, fmtPhone, waLink, dateShort, dateTime, subState, PRICE_MONTH, q, errMsg, toast, I, qrBlock } from './core.js';
 
 const root = $('#root');
 const S = { user: null, rows: [], filter: 'tous', search: '' };
@@ -60,7 +60,8 @@ function render() {
   const counts = {}; FILTERS.forEach(([k, , f]) => { counts[k] = R.filter(f).length; });
   root.innerHTML = '<div class="adm">' +
     '<div class="adm-top"><span class="logo">' + I.shield + '</span><div class="grow"><div class="brandname">Admin Pressing Pro</div><div class="brandsub">' + esc(S.user.email) + '</div></div>' +
-      '<button class="btn sm" type="button" data-a="reload">Actualiser</button><a class="btn sm" href="app.html">Ouvrir l’app</a><button class="btn sm ghost" type="button" data-a="logout">' + I.logout + ' Déconnexion</button></div>' +
+      '<button class="btn sm" type="button" data-a="qr">' + I.qr + ' QR de l’app</button><button class="btn sm" type="button" data-a="reload">Actualiser</button><a class="btn sm" href="app.html">Ouvrir l’app</a><button class="btn sm ghost" type="button" data-a="logout">' + I.logout + ' Déconnexion</button></div>' +
+    '<section class="card stack" id="qr-card" hidden style="margin-bottom:14px;align-items:center"><h2 style="font-size:17px">Fais scanner ce code aux gérants de pressing</h2>' + qrBlock(location.origin + '/', 'Ils arrivent sur la présentation de Pressing Pro et peuvent créer leur compte (30 jours gratuits). Fais une capture d’écran pour le partager.') + '</section>' +
     '<section class="hero" style="margin-bottom:14px"><div class="k">Revenu mensuel (abonnés payants)</div><div class="v">' + fmt(mrr) + ' <small>FCFA / mois</small></div>' +
       '<div class="tiles"><div class="tile"><div class="k">Pressings</div><div class="v">' + R.length + '</div></div><div class="tile"><div class="k">Payants</div><div class="v">' + n('active') + '</div></div><div class="tile"><div class="k">En essai</div><div class="v">' + n('trial') + '</div></div></div></section>' +
     '<div class="kpis" style="margin-bottom:14px"><div class="kpi"><div class="k">Expirés</div><div class="v" style="color:var(--bad)">' + n('expired') + '</div></div><div class="kpi"><div class="k">Suspendus</div><div class="v">' + n('suspended') + '</div></div>' +
@@ -106,6 +107,7 @@ document.addEventListener('click', async e => {
   const a = b.dataset.a, r = S.rows.find(x => x.id === b.dataset.id);
   try {
     if (a === 'reload') return load();
+    if (a === 'qr') { const c = $('#qr-card'); c.hidden = !c.hidden; return; }
     if (a === 'logout') { await sb.auth.signOut(); return; }
     if (a === 'filter') { S.filter = b.dataset.f; document.querySelectorAll('[data-a="filter"]').forEach(x => x.setAttribute('aria-pressed', String(x === b))); return renderList(); }
     if (!r) return;

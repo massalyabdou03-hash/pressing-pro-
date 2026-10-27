@@ -15,7 +15,7 @@ Le code JavaScript est dans `assets/` : `core.js` (outils communs), `app.js` (l'
 
 ## Fonctionnement
 
-- Pas d'étape de build : ce sont des fichiers statiques, publiés tels quels sur Netlify.
+- Pas d'étape de build : ce sont des fichiers statiques, publiés tels quels sur Vercel (projet « pressing-pro-sn », redéployé à chaque push sur main).
 - Les données sont dans Supabase (projet « Pressing Pro »). Chaque pressing ne voit que ses données grâce aux règles de sécurité (RLS) de la base.
 - Abonnement : 30 jours d'essai, puis l'admin prolonge l'accès (+1 mois, +3 mois) après réception du paiement Wave / OM. Sans abonnement, l'app passe en lecture seule.
 - L'accès admin est réservé aux emails listés dans la table `platform_admins`.

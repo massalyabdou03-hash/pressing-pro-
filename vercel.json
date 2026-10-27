@@ -1,8 +1,28 @@
 {
   "rewrites": [
-    { "source": "/t/:code", "destination": "/suivi.html" }
+    {
+      "source": "/t/:code",
+      "destination": "/suivi.html"
+    }
   ],
   "headers": [
-    { "source": "/admin.html", "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }] }
+    {
+      "source": "/admin.html",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex"
+        }
+      ]
+    },
+    {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    }
   ]
 }

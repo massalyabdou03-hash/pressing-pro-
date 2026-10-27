@@ -126,6 +126,9 @@ textarea.inp{padding:10px 13px;min-height:72px;resize:vertical}
 .banner.warn{background:var(--warn-soft);color:#5E3D00}
 .banner.bad{background:var(--bad-soft);color:#7A1A12}
 .banner .btn{min-height:38px}
+.banner.off{background:#E6EBF2;color:#22314A}
+.banner.sync{background:var(--accent-soft);color:var(--accent)}
+@media (prefers-reduced-motion:no-preference){.banner.sync svg{animation:spin 1.2s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}}
 .nav{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--surface);border-top:1px solid var(--line);padding:6px 8px calc(8px + env(safe-area-inset-bottom,0px));display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:2px}
 .nav a{display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 0;border-radius:12px;color:var(--muted);font-size:11px;font-weight:700;text-decoration:none}
 .nav a svg{width:22px;height:22px}

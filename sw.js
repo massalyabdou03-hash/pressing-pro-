@@ -1,9 +1,9 @@
 /* Pressing Pro : fait fonctionner l'app sans connexion.
    - Pages : réseau d'abord, copie locale si pas de réseau.
-   - Fichiers du site : copie locale tout de suite, mise à jour en arrière-plan.
+   - Fichiers du site : réseau d'abord (3 s max), sinon la copie locale. Une mise à jour arrive donc dès l'ouverture.
    - Librairies et polices (CDN) : copie locale d'abord.
    - Données (Supabase) : jamais mises en cache ici, l'app gère sa propre file d'attente. */
-const VERSION = 'pp-v3';
+const VERSION = 'pp-v4';
 const CORE = [
   '/app.html',
   '/assets/style.css',
@@ -76,13 +76,16 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Fichiers du site : copie locale tout de suite, mise à jour en arrière-plan
+  // Fichiers du site : réseau d'abord (3 s max), sinon la copie locale
   if (url.origin === self.location.origin) {
     event.respondWith(
       caches.open(VERSION).then(async cache => {
-        const hit = await cache.match(req);
-        const net = fetch(req).then(res => { if (res.ok) cache.put(req, res.clone()); return res; }).catch(() => hit);
-        return hit || net;
+        const net = fetch(req).then(res => { if (res.ok) cache.put(req, res.clone()); return res; });
+        const late = new Promise(r => setTimeout(r, 3000));
+        const hit = await Promise.race([net.then(() => null, () => 'fail'), late.then(() => 'slow')]);
+        if (hit === null) return net;
+        const copy = await cache.match(req);
+        return copy || net;
       })
     );
   }

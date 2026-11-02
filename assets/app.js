@@ -1,6 +1,6 @@
 import {
   sb, $, esc, fmt, money, digits, fmtPhone, waLink, todayIso, addDaysIso, dayLabel, dateTime, dateShort,
-  ticketNo, startOfDay, STATUS, STEPS, METHODS, DEFECTS, CATEGORIES, subState, supportLink, PRICE_MONTH,
+  ticketNo, lotNo, payNo, startOfDay, STATUS, STEPS, METHODS, DEFECTS, CATEGORIES, subState, supportLink, PRICE_MONTH,
   q, errMsg, toast, I, qrBlock, TRACK_BASE
 } from './core.js';
 
@@ -9,7 +9,7 @@ import {
    ========================================================= */
 const S = {
   user: null, member: null, pressing: null, types: [],
-  orders: null, filter: 'actifs', search: '',
+  orders: null, lots: null, filter: 'actifs', search: '', lotSel: null, lotSearch: '', updateReady: false,
   draft: null, newCat: 'Tous',
   cashPeriod: 'jour', clientSearch: '',
   recovery: false, authMode: location.hash === '#signup' ? 'signup' : 'login',
@@ -34,7 +34,16 @@ const tno = o => o && o.number ? ticketNo(o.number) : 'N° à venir';
 /* =========================================================
    Hors connexion : cache local, file d'attente, synchronisation
    ========================================================= */
-if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('/sw.js').catch(() => {});
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  const hadCtrl = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+  // nouvelle version publiée : on recharge dès que ça ne gêne pas (pas de dépôt en cours, pas de fenêtre ouverte)
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadCtrl) { S.updateReady = true; maybeReload(); } });
+}
+function maybeReload() {
+  const d = S.draft;
+  if (S.updateReady && !(d && (d.lines.length || d.customer.name || d.customer.phone)) && !$('#modal')) location.reload();
+}
 const LSK = k => 'pp:' + (S.user ? S.user.id : 'x') + ':' + k;
 const lget = (k, d) => { try { const v = localStorage.getItem(LSK(k)); return v ? JSON.parse(v) : d; } catch (e) { return d; } };
 const lset = (k, v) => { try { localStorage.setItem(LSK(k), JSON.stringify(v)); } catch (e) {} };
@@ -42,12 +51,14 @@ const isNet = e => !navigator.onLine || /Failed to fetch|NetworkError|Load faile
 const newId = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, ch => { const r = Math.random() * 16 | 0; return (ch === 'x' ? r : (r & 3 | 8)).toString(16); }));
 const genCode = () => { const a = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789', b = new Uint8Array(8); crypto.getRandomValues(b); return Array.from(b, x => a[x % 31]).join(''); };
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout network')), ms))]);
-const ORDER_SEL = 'id,number,status,total,paid,subtotal,discount,delivery_fee,due_at,express,delivery,notes,track_code,track_token,created_at,ready_at,picked_at,customer_id,customers(id,name,phone),order_items(id,name,qty,unit_price,color,defects),payments(id,amount,method,created_at)';
+const ORDER_SEL = 'id,number,status,total,paid,subtotal,discount,delivery_fee,due_at,express,delivery,notes,track_code,track_token,created_at,ready_at,picked_at,customer_id,lot_id,lots(id,number),customers(id,name,phone),order_items(id,name,qty,unit_price,color,defects),payments(id,number,amount,method,created_at,voided_at,void_reason)';
+const OPEN = ['recu', 'lavage', 'pret'];
 const OB = { list: [], failed: [], flushing: false };
 function obLoad() { OB.list = lget('outbox', []); OB.failed = lget('failed', []); }
 function obSave() { lset('outbox', OB.list); lset('failed', OB.failed); }
-function saveOrders() { if (S.orders) lset('orders', S.orders.slice(0, 600)); }
+function saveOrders() { if (S.orders) lset('orders', S.orders.slice(0, 1200)); if (S.lots) lset('lots', S.lots); }
 const findOrder = id => (S.orders || []).find(o => o.id === id);
+const findLot = id => (S.lots || []).find(l => l.id === id);
 function upsertOrder(o) {
   if (!S.orders) S.orders = lget('orders', []);
   const i = S.orders.findIndex(x => x.id === o.id);
@@ -58,13 +69,25 @@ function applyOp(op) {
   if (op.t === 'create') { if (!findOrder(op.local.id)) S.orders.unshift(JSON.parse(JSON.stringify(op.local))); }
   else if (op.t === 'pay') {
     const o = findOrder(op.row.order_id);
-    if (o && !(o.payments || []).some(p => p.id === op.row.id)) { (o.payments = o.payments || []).push({ id: op.row.id, amount: op.row.amount, method: op.row.method, created_at: op.row.created_at, _pending: true }); o.paid += op.row.amount; }
+    if (o && !(o.payments || []).some(p => p.id === op.row.id)) { (o.payments = o.payments || []).push({ id: op.row.id, number: null, amount: op.row.amount, method: op.row.method, created_at: op.row.created_at, _pending: true }); o.paid += op.row.amount; }
   } else if (op.t === 'patch') { const o = findOrder(op.id); if (o) Object.assign(o, op.patch); }
+  else if (op.t === 'lot') {
+    const l = findLot(op.id); if (l) l.status = op.status;
+    S.orders.forEach(o => {
+      if (o.lot_id !== op.id || !OPEN.includes(o.status)) return;
+      if (op.status === 'pret') { if (o.status !== 'pret') o.ready_at = op.at; } else o.ready_at = null;
+      o.status = op.status; o.picked_at = null;
+    });
+  }
 }
 function undoOp(op) {
   if (op.t === 'create') S.orders = (S.orders || []).filter(o => o.id !== op.local.id);
   else if (op.t === 'pay') { const o = findOrder(op.row.order_id); if (o) { o.payments = (o.payments || []).filter(p => p.id !== op.row.id); o.paid -= op.row.amount; } }
   else if (op.t === 'patch') { const o = findOrder(op.id); if (o && op.prev) Object.assign(o, op.prev); }
+  else if (op.t === 'lot' && op.prev) {
+    const l = findLot(op.id); if (l) l.status = op.prev.lot;
+    Object.keys(op.prev.orders).forEach(id => { const o = findOrder(id); if (o) Object.assign(o, op.prev.orders[id]); });
+  }
 }
 function custCache() { return lget('customers', []); }
 function addCustomerCache(c) {
@@ -99,15 +122,26 @@ async function runOp(op) {
     const res = await q(sb.rpc('create_order', op.args));
     const o = findOrder(op.local.id);
     const fix = { number: res.number, total: res.total, discount: res.discount, track_code: res.track_code, customer_id: res.customer_id, _pending: false, _error: null };
-    if (o) { Object.assign(o, fix); if (o.customers) o.customers.id = res.customer_id; }
+    if (o) {
+      Object.assign(o, fix); if (o.customers) o.customers.id = res.customer_id;
+      (o.payments || []).forEach(p => { if (p.id === op.args.p_opts.payment_id) { p.number = res.payment_number || null; p._pending = false; } });
+    }
     if (op.newTypes) loadTypes().catch(() => {});
   } else if (op.t === 'pay') {
-    const { error } = await sb.from('payments').insert(op.row);
-    if (error && !(error.code === '23505' || /duplicate/i.test(error.message || ''))) throw error;
-    const o = findOrder(op.row.order_id); if (o) (o.payments || []).forEach(p => { if (p.id === op.row.id) p._pending = false; });
+    const { data, error } = await sb.from('payments').insert(op.row).select('number').maybeSingle();
+    let num = data ? data.number : null;
+    if (error) {
+      if (!(error.code === '23505' || /duplicate/i.test(error.message || ''))) throw error;
+      // déjà enregistré lors d'un envoi précédent : on récupère son numéro
+      const r = await sb.from('payments').select('number').eq('id', op.row.id).maybeSingle();
+      num = r.data ? r.data.number : null;
+    }
+    const o = findOrder(op.row.order_id); if (o) (o.payments || []).forEach(p => { if (p.id === op.row.id) { p._pending = false; p.number = num; } });
   } else if (op.t === 'patch') {
     const rows = await q(sb.from('orders').update(op.patch).eq('id', op.id).select('id'));
-    if (!rows.length) throw new Error('Action refusée. Ton abonnement est peut-être expiré.');
+    if (!rows.length) throw new Error('Action refusée : réservé au gérant, ou abonnement expiré.');
+  } else if (op.t === 'lot') {
+    await q(sb.rpc('lot_set_status', { p_lot: op.id, p_status: op.status }));
   }
 }
 async function doOp(op) {
@@ -140,11 +174,15 @@ async function flush() {
     toast(sent + ' opération' + (sent > 1 ? 's' : '') + ' envoyée' + (sent > 1 ? 's' : '') + ' au serveur', 'ok');
     const h = location.hash;
     if (h.startsWith('#/t/') && CUR) { const o = findOrder(CUR.id); if (o) { CUR = o; renderTicket(false); } }
+    else if (h.startsWith('#/l/') && LCUR) renderLot();
     else if (h === '' || h === '#/' || h === '#') renderTicketList();
     ensurePool();
   }
 }
-const opLabel = op => op.t === 'create' ? 'Ticket ' + tno(op.local) + ' · ' + ((op.local.customers || {}).name || '') : op.t === 'pay' ? 'Paiement de ' + fmt(op.row.amount) + ' F' : 'Modification d’un ticket';
+const opLabel = op => op.t === 'create' ? 'Ticket ' + tno(op.local) + ' · ' + ((op.local.customers || {}).name || '')
+  : op.t === 'pay' ? 'Paiement de ' + fmt(op.row.amount) + ' F'
+  : op.t === 'lot' ? (findLot(op.id) ? lotNo(findLot(op.id).number) : 'Lot') + ' : passage à « ' + STATUS[op.status].l + ' »'
+  : 'Modification d’un ticket';
 function renderNet() {
   const el = $('#netbar'); if (!el) return;
   const n = OB.list.length, f = OB.failed.length, off = !navigator.onLine;
@@ -328,7 +366,15 @@ HF.newpass = (f) => busy(f.querySelector('[type=submit]'), async () => {
   S.recovery = false; toast('Mot de passe modifié', 'ok');
   const { data } = await sb.auth.getSession(); start(data.session);
 });
-H.logout = async () => { if (OB.list.length && !confirm(OB.list.length + ' opération(s) ne sont pas encore envoyées. Si tu te déconnectes maintenant, elles restent sur ce téléphone et partiront à ta prochaine connexion. Continuer ?')) return; await sb.auth.signOut(); S.user = null; S.pressing = null; S.orders = null; S.draft = null; location.hash = ''; renderAuth(); };
+H.logout = async () => {
+  const pending = OB.list.length + OB.failed.length;
+  if (pending && !confirm(pending + ' opération(s) ne sont pas encore envoyées. Si tu te déconnectes maintenant, elles restent sur ce téléphone et partiront à ta prochaine connexion. Continuer ?')) return;
+  const prefix = S.user ? 'pp:' + S.user.id + ':' : null;
+  await sb.auth.signOut();
+  // rien en attente : on efface les clients et tickets gardés sur ce téléphone (on garde seulement les numéros de ticket réservés)
+  if (prefix && !pending) { try { Object.keys(localStorage).filter(k => k.startsWith(prefix) && !k.startsWith(prefix + 'pool:')).forEach(k => localStorage.removeItem(k)); } catch (e) {} }
+  S.user = null; S.pressing = null; S.orders = null; S.lots = null; S.draft = null; location.hash = ''; renderAuth();
+};
 
 /* ---------- premier lancement ---------- */
 function renderOnboard() {
@@ -342,8 +388,8 @@ function renderOnboard() {
     '<p class="err" id="o-err" hidden></p><button class="btn primary block" type="submit">Créer mon pressing (30 jours gratuits)</button>' +
     '<p class="hint">Un catalogue d’habits avec des prix de départ est créé pour toi. Tu pourras tout modifier.</p></form>' +
     '<form class="card stack" data-form="join-pressing" novalidate><h2>Je rejoins l’équipe d’un pressing</h2>' +
-    '<p class="hint">Demande le code à 6 caractères au gérant (Réglages › Équipe).</p>' +
-    '<div class="row2"><div class="field"><label for="j-code">Code</label><input class="inp" id="j-code" name="code" autocomplete="off" style="text-transform:uppercase;letter-spacing:.15em" maxlength="6"></div>' +
+    '<p class="hint">Demande le code à 8 caractères au gérant (Réglages › Équipe).</p>' +
+    '<div class="row2"><div class="field"><label for="j-code">Code</label><input class="inp" id="j-code" name="code" autocomplete="off" style="text-transform:uppercase;letter-spacing:.15em" maxlength="10"></div>' +
     '<div class="field"><label for="j-name">Ton prénom</label><input class="inp" id="j-name" name="dname" value="' + esc(name) + '"></div></div>' +
     '<p class="err" id="j-err" hidden></p><button class="btn block" type="submit">Rejoindre</button></form>' +
     '<button class="btn ghost" type="button" data-act="logout">' + I.logout + ' Se déconnecter</button></div></div>';
@@ -357,7 +403,10 @@ HF['create-pressing'] = (f) => busy(f.querySelector('[type=submit]'), async () =
 });
 HF['join-pressing'] = (f) => busy(f.querySelector('[type=submit]'), async () => {
   const err = $('#j-err'); err.hidden = true;
-  try { await q(sb.rpc('join_pressing', { p_code: f.code.value.trim(), p_name: f.dname.value.trim() })); }
+  try {
+    const joined = await q(sb.rpc('join_pressing', { p_code: f.code.value.trim(), p_name: f.dname.value.trim() }));
+    if (!joined) { err.textContent = 'Code invalide. Vérifie-le auprès du gérant (5 essais par heure).'; err.hidden = false; return; }
+  }
   catch (e) { err.textContent = errMsg(e); err.hidden = false; return; }
   toast('Tu as rejoint l’équipe', 'ok'); location.hash = '#/'; await loadContext();
 });
@@ -374,15 +423,17 @@ function parseRoute() {
   return { parts, params: new URLSearchParams(qs || '') };
 }
 function route() {
+  maybeReload();
   closeModal();
   const { parts, params } = parseRoute();
   const seq = ++S.seq;
   const v = parts[0] || '';
-  const nav = v === 't' ? '' : (v === 'c' ? 'clients' : v);
-  shell(nav === '' && v !== 't' ? 'tickets' : nav);
+  const nav = v === 't' ? 'tickets' : v === 'c' ? 'clients' : v === 'l' ? 'lots' : (v || 'tickets');
+  shell(nav);
   const views = {
     '': () => viewTickets(seq), 'new': () => viewNew(seq, params), 't': () => viewTicket(seq, parts[1], params),
-    'clients': () => viewClients(seq), 'c': () => viewClient(seq, parts[1]), 'caisse': () => viewCaisse(seq), 'reglages': () => viewSettings(seq)
+    'clients': () => viewClients(seq), 'c': () => viewClient(seq, parts[1]), 'caisse': () => viewCaisse(seq), 'reglages': () => viewSettings(seq),
+    'lots': () => parts[1] === 'new' ? viewLotNew(seq, params) : viewLots(seq), 'l': () => viewLot(seq, parts[1])
   };
   renderNet();
   (views[v] || views[''])().catch(e => {
@@ -415,6 +466,7 @@ function shell(active) {
       '<div class="nav-brand"><span class="logo">' + I.logo + '</span><div style="min-width:0"><div class="brandname">Pressing Pro</div><div class="brandsub">' + esc(p.name) + '</div></div></div>' +
       link('new', '#/new', I.plus, 'Nouveau', 'new') +
       link('tickets', '#/', I.ticket, 'Tickets') +
+      link('lots', '#/lots', I.layers, 'Lots') +
       link('clients', '#/clients', I.users, 'Clients') +
       link('caisse', '#/caisse', I.cash, 'Caisse') +
       link('reglages', '#/reglages', I.gear, 'Réglages') +
@@ -437,6 +489,7 @@ function needWrite() {
 const FILTERS = [
   ['actifs', 'En cours', o => ['recu', 'lavage', 'pret'].includes(o.status)],
   ['recu', 'Reçus', o => o.status === 'recu'],
+  ['sanslot', 'Sans lot', o => (o.status === 'recu' || o.status === 'lavage') && !o.lot_id],
   ['lavage', 'En lavage', o => o.status === 'lavage'],
   ['pret', 'Prêts', o => o.status === 'pret'],
   ['oublies', 'Oubliés', o => o.status === 'pret' && o.ready_at && (Date.now() - new Date(o.ready_at)) > 7 * 864e5],
@@ -448,7 +501,13 @@ async function loadOrders(force) {
   if (S.orders && !force) return S.orders;
   if (navigator.onLine && !OB.flushing) {
     try {
-      const rows = await withTimeout(q(sb.from('orders').select(ORDER_SEL).eq('pressing_id', pid()).order('created_at', { ascending: false }).limit(500)), 12000);
+      // les 300 derniers tickets + tous ceux encore en cours ou pas payés (même anciens)
+      const [recent, open] = await withTimeout(Promise.all([
+        q(sb.from('orders').select(ORDER_SEL).eq('pressing_id', pid()).order('created_at', { ascending: false }).limit(300)),
+        q(sb.from('orders').select(ORDER_SEL).eq('pressing_id', pid()).neq('status', 'annule').or('status.in.(recu,lavage,pret),due.gt.0').order('created_at', { ascending: false }).limit(3000))
+      ]), 15000);
+      const byId = new Map(); open.concat(recent).forEach(r => byId.set(r.id, r));
+      const rows = Array.from(byId.values()).sort((a, b) => b.created_at.localeCompare(a.created_at));
       const keep = (S.orders || []).filter(o => o._pending && !rows.some(r => r.id === o.id));
       S.orders = keep.concat(rows);
       OB.list.forEach(applyOp); OB.failed.forEach(op => { if (op.t === 'create') applyOp(op); });
@@ -496,8 +555,9 @@ function renderTicketList() {
   let list = S.orders.filter(f);
   if (term) {
     list = S.orders.filter(o =>
-      (dterm && (String(o.number) === dterm.replace(/^0+/, '') || digits(o.customers && o.customers.phone).includes(dterm))) ||
-      (o.customers && o.customers.name.toLowerCase().includes(term)));
+      (dterm && (String(o.number) === (dterm.replace(/^0+/, '') || '0') || (dterm.length >= 3 && digits(o.customers && o.customers.phone).includes(dterm)))) ||
+      (o.customers && o.customers.name.toLowerCase().includes(term)))
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
   }
   if (!list.length) {
     box.innerHTML = S.orders.length
@@ -509,13 +569,31 @@ function renderTicketList() {
     const st = STATUS[o.status], rest = o.total - o.paid;
     return '<a class="li" href="#/t/' + o.id + '"><span class="tno">' + (o.number ? tno(o) : '…') + '</span>' +
       '<span class="mid"><span class="t">' + esc(o.customers ? o.customers.name : 'Client supprimé') + (o.express ? ' <span class="badge b-warn">Express</span>' : '') + '</span>' +
-      '<span class="s" style="display:block">' + esc(itemsSummary(o.order_items)) + '</span></span>' +
+      '<span class="s" style="display:block">' + (o.lot_id ? '<b>' + esc(lotLabel(o)) + '</b> · ' : '') + esc(itemsSummary(o.order_items)) + '</span></span>' +
       '<span class="r"><span class="badge ' + (o._error ? 'b-bad' : o._pending ? 'b-warn' : isLate(o) ? 'b-bad' : st.c) + '">' + (o._error ? 'Refusé' : o._pending ? 'À envoyer' : isLate(o) ? 'En retard' : st.l) + '</span>' +
       '<span style="font-size:12px" class="' + (o.status === 'annule' ? 'muted' : (rest > 0 ? 'due' : 'paid')) + '">' + (o.status === 'annule' ? '—' : (rest > 0 ? 'Reste ' + fmt(rest) : 'Payé')) + '</span></span></a>';
   }).join('');
 }
 H['tk-filter'] = t => { S.filter = t.dataset.f; S.search = ''; const i = $('#tk-q'); if (i) i.value = ''; document.querySelectorAll('[data-act="tk-filter"]').forEach(b => b.setAttribute('aria-pressed', String(b === t))); renderTicketList(); };
-HI['tk-q'] = t => { S.search = t.value; renderTicketList(); };
+HI['tk-q'] = t => { S.search = t.value; renderTicketList(); serverSearch(t.value); };
+const lotLabel = o => { const l = o.lots || findLot(o.lot_id); return l ? lotNo(l.number) : 'Lot'; };
+// cherche aussi dans les anciens tickets, qui ne sont pas gardés sur le téléphone
+let srchT = null;
+function serverSearch(v) {
+  clearTimeout(srchT);
+  const term = v.trim();
+  if (term.length < 2 || !navigator.onLine) return;
+  srchT = setTimeout(async () => {
+    try {
+      const ids = await withTimeout(q(sb.rpc('search_orders', { p_pressing: pid(), p_term: term })), 8000);
+      const miss = (ids || []).filter(id => !findOrder(id));
+      if (!miss.length) return;
+      const rows = await withTimeout(q(sb.from('orders').select(ORDER_SEL).in('id', miss)), 8000);
+      rows.forEach(r => { if (!findOrder(r.id)) S.orders.push(r); });
+      if (S.search.trim() === term) renderTicketList();
+    } catch (e) {}
+  }, 350);
+}
 
 /* =========================================================
    Nouveau dépôt
@@ -563,7 +641,7 @@ function renderNew() {
         '<div class="field"><label for="nw-adv">Avance payée (FCFA)</label><input class="inp" id="nw-adv" inputmode="numeric" data-in="nw-adv" value="' + (d.advance ? fmt(d.advance) : '') + '" placeholder="0"></div></div>' +
       '<div class="chips" role="group" aria-label="Mode de paiement">' + Object.keys(METHODS).filter(k => k !== 'autre').map(k => '<button type="button" class="chip sm" data-act="nw-method" data-m="' + k + '" aria-pressed="' + (d.method === k) + '">' + METHODS[k] + '</button>').join('') + '</div>' +
       '<div class="field"><label for="nw-notes">Note (facultatif)</label><textarea class="inp" id="nw-notes" data-in="nw-notes" maxlength="500" placeholder="Ex. sans amidon, livrer à Ouakam…">' + esc(d.notes) + '</textarea></div>' +
-      '<label class="hstack" style="font-size:14px;font-weight:600"><input type="checkbox" data-ch="nw-savenew"' + (d.saveNew ? ' checked' : '') + ' style="width:20px;height:20px"> Ajouter les nouveaux habits au catalogue</label>' +
+      (isOwner() ? '<label class="hstack" style="font-size:14px;font-weight:600"><input type="checkbox" data-ch="nw-savenew"' + (d.saveNew ? ' checked' : '') + ' style="width:20px;height:20px"> Ajouter les nouveaux habits au catalogue</label>' : '') +
     '</section></div>' +
     '<div><section class="card stack sumbar" id="nw-sum" aria-label="Total"></section></div></div>' +
     '<div class="nw-spacer"></div><div class="nw-bar" id="nw-bar" hidden></div>';
@@ -797,9 +875,9 @@ H['nw-submit'] = t => {
     };
     const args = {
       p_pressing: pid(), p_customer: { id: cust.id, name: cust.name, phone: cust.phone }, p_items: items,
-      p_opts: { id, track_code: code, created_at: now, payment_id: payId, express: d.express, delivery: d.delivery, delivery_fee: settings().delivery_fee, due_at: d.due, notes: d.notes, advance: tot.adv, method: d.method, save_new_types: d.saveNew }
+      p_opts: { id, track_code: code, created_at: now, payment_id: payId, express: d.express, delivery: d.delivery, delivery_fee: settings().delivery_fee, due_at: d.due, notes: d.notes, advance: tot.adv, method: d.method, save_new_types: d.saveNew && isOwner() }
     };
-    const newLines = d.saveNew ? d.lines.filter(l => lineCustom(l.name)) : [];
+    const newLines = d.saveNew && isOwner() ? d.lines.filter(l => lineCustom(l.name)) : [];
     const r = await doOp({ t: 'create', local, args, newTypes: newLines.length > 0 });
     const saved = findOrder(id) || local;
     if (isNewCust || saved.customer_id !== cust.id) addCustomerCache({ id: saved.customer_id, name: cust.name, phone: cust.phone });
@@ -863,7 +941,8 @@ function renderTicket(isNew) {
     (o._error ? '<div class="banner bad">' + I.wifiOff + '<span style="flex:1">Refusé par le serveur : ' + esc(o._error) + '</span><button class="btn sm" type="button" data-act="net-failed">Voir</button></div>'
       : o._pending ? '<div class="banner off">' + I.wifiOff + '<span style="flex:1"><b>Pas encore envoyé.</b> Ce ticket est gardé sur ce téléphone et partira tout seul au retour du réseau. Le lien de suivi marchera dès l’envoi.</span></div>' : '') +
     '<div class="page-h"><a class="iconbtn" href="#/" aria-label="Retour aux tickets">' + I.back + '</a>' +
-      '<div class="grow"><h1>Ticket ' + tno(o) + '</h1><div class="muted" style="font-size:13px">Déposé le ' + esc(dateTime(o.created_at)) + '</div></div>' +
+      '<div class="grow"><h1>Ticket ' + tno(o) + '</h1><div class="muted" style="font-size:13px">Déposé le ' + esc(dateTime(o.created_at)) +
+        (o.lot_id ? ' · <a href="#/l/' + o.lot_id + '" style="font-weight:800;color:var(--accent)">' + esc(lotLabel(o)) + '</a>' : '') + '</div></div>' +
       '<span class="badge ' + st.c + '" style="font-size:13px">' + st.l + '</span></div>' +
     (isNew ? '<div class="card stack" style="border-color:var(--ok);margin-bottom:14px"><div class="hstack"><span class="badge b-ok">' + I.check + ' Ticket créé</span><span class="muted">Envoie la confirmation et imprime le ticket.</span></div>' +
       '<div class="hstack">' + (wa('confirm', 'Envoyer le ticket sur WhatsApp', 'wa') || '<span class="hint">Pas de numéro : utilise « Partager ».</span>') + '<button class="btn" type="button" data-act="tk-share">' + I.link + ' Partager</button>' +
@@ -889,7 +968,11 @@ function renderTicket(isNew) {
         '<div class="kv big"><span>Total</span><span class="num">' + money(o.total) + '</span></div>' +
         '<div class="kv"><span class="muted">Payé</span><b class="paid num">' + fmt(o.paid) + ' F</b></div>' +
         '<div class="kv"><span>Reste</span><b class="num ' + (rest > 0 ? 'due' : 'paid') + '">' + fmt(rest) + ' F</b></div></div>' +
-      (o.payments.length ? '<div class="sec-t" style="margin-top:8px">Paiements</div>' + o.payments.map(p => '<div class="kv" style="font-size:14px"><span class="muted">' + esc(dateTime(p.created_at)) + ' · ' + METHODS[p.method] + (p._pending ? ' · à envoyer' : '') + '</span><b class="num">' + fmt(p.amount) + ' F</b></div>').join('') : '') +
+      ((o.payments || []).length ? '<div class="sec-t" style="margin-top:8px">Paiements</div>' + o.payments.map(p =>
+        '<div class="kv pay' + (p.voided_at ? ' void' : '') + '" style="font-size:14px;align-items:center"><span style="min-width:0"><b>' + payNo(p.number) + '</b> <span class="muted">· ' + esc(dateTime(p.created_at)) + ' · ' + METHODS[p.method] +
+          (p._pending ? ' · à envoyer' : '') + (p.voided_at ? ' · annulé' + (p.void_reason ? ' (' + esc(p.void_reason) + ')' : '') : '') + '</span></span>' +
+          '<span class="hstack" style="gap:6px;flex-wrap:nowrap;flex:none"><b class="num">' + fmt(p.amount) + ' F</b>' +
+          (isOwner() && !p.voided_at && !p._pending && o.status !== 'annule' ? '<button class="btn sm ghost danger" type="button" data-act="pay-void" data-id="' + p.id + '">Annuler</button>' : '') + '</span></div>').join('') : '') +
       (rest > 0 && o.status !== 'annule' ? '<button class="btn ok block" type="button" data-act="tk-pay" style="margin-top:10px">' + I.cash + ' Encaisser</button>' : '') +
     '</section></div>' +
     '<div class="stack">' +
@@ -932,7 +1015,25 @@ H['tk-next'] = t => {
   });
 };
 H['tk-prev'] = t => { if (!needWrite()) return; const i = STEPS.indexOf(CUR.status); if (i > 0) busy(t, async () => { await setStatus(STEPS[i - 1]); renderTicket(false); }); };
-H['tk-cancel'] = t => { if (!needWrite()) return; if (confirm('Annuler le ticket ' + tno(CUR) + ' ?')) busy(t, async () => { await setStatus('annule'); renderTicket(false); }); };
+H['tk-cancel'] = t => {
+  if (!needWrite()) return;
+  const msg = 'Annuler le ticket ' + tno(CUR) + ' ?' + (CUR.paid > 0 ? '\nSes paiements (' + money(CUR.paid) + ') seront aussi annulés : rends l’argent au client.' : '') + '\nUn ticket annulé ne peut pas être rouvert.';
+  if (!confirm(msg)) return;
+  busy(t, async () => { const r = await doOp({ t: 'patch', id: CUR.id, patch: { status: 'annule' }, prev: { status: CUR.status } }); if (r === 'sent') await refreshCur(); else renderTicket(false); });
+};
+async function refreshCur() {
+  const o = await q(sb.from('orders').select(ORDER_SEL).eq('id', CUR.id).maybeSingle());
+  if (o) { upsertOrder(o); OB.list.forEach(applyOp); saveOrders(); CUR = findOrder(o.id); (CUR.payments || []).sort((a, b) => a.created_at.localeCompare(b.created_at)); }
+  renderTicket(false);
+}
+H['pay-void'] = t => {
+  if (!needWrite()) return;
+  const p = (CUR.payments || []).find(x => x.id === t.dataset.id); if (!p) return;
+  if (!navigator.onLine) { toast('Annuler un paiement demande internet.', 'bad'); return; }
+  const reason = prompt('Annuler le paiement ' + payNo(p.number) + ' de ' + money(p.amount) + ' ?\nIl restera visible, barré, avec la raison.\n\nRaison :', 'Erreur de montant');
+  if (reason === null) return;
+  busy(t, async () => { await q(sb.rpc('void_payment', { p_id: p.id, p_reason: reason })); await refreshCur(); toast('Paiement ' + payNo(p.number) + ' annulé', 'ok'); });
+};
 HC['tk-due'] = t => { if (!needWrite()) return; busy(null, async () => { const r = await doOp({ t: 'patch', id: CUR.id, patch: { due_at: t.value || null }, prev: { due_at: CUR.due_at } }); toast(r === 'queued' ? 'Date gardée sur ce téléphone' : 'Date enregistrée', 'ok'); }); };
 HC['tk-notes'] = t => { if (!needWrite()) return; busy(null, async () => { const r = await doOp({ t: 'patch', id: CUR.id, patch: { notes: t.value.slice(0, 500) }, prev: { notes: CUR.notes } }); toast(r === 'queued' ? 'Note gardée sur ce téléphone' : 'Note enregistrée', 'ok'); }); };
 H['tk-qr'] = () => {
@@ -964,11 +1065,14 @@ H['tk-pay'] = () => openPay(false);
 H['pay-m'] = t => { const f = t.closest('form'); f.method.value = t.dataset.m; f.querySelectorAll('[data-act="pay-m"]').forEach(b => b.setAttribute('aria-pressed', String(b === t))); };
 HI['amt-fmt'] = t => { const n = parseAmt(t.value); t.value = n ? fmt(n) : ''; };
 HF.pay = (f) => busy(f.querySelector('[type=submit]'), async () => {
-  const amt = parseAmt(f.amt.value);
+  const amt = parseAmt(f.amt.value), rest = CUR.total - CUR.paid;
   if (amt <= 0) return toast('Montant invalide', 'bad');
-  const r = await doOp({ t: 'pay', row: { id: newId(), order_id: CUR.id, pressing_id: pid(), amount: amt, method: f.method.value, created_by: S.user.id, created_at: new Date().toISOString() } });
+  if (amt > rest) return toast('Le reste dû est de ' + money(rest) + ' : le montant ne peut pas dépasser.', 'bad');
+  const row = { id: newId(), order_id: CUR.id, pressing_id: pid(), amount: amt, method: f.method.value, created_by: S.user.id, created_at: new Date().toISOString() };
+  const r = await doOp({ t: 'pay', row });
   if (f.dataset.pickup === '1') await setStatus('retire');
-  closeModal(); toast(fmt(amt) + ' FCFA encaissés' + (r === 'queued' ? ' (gardé sur ce téléphone)' : ''), 'ok');
+  const pay = (CUR.payments || []).find(p => p.id === row.id);
+  closeModal(); toast(fmt(amt) + ' FCFA encaissés' + (r === 'queued' ? ' (gardé sur ce téléphone, n° à venir)' : pay && pay.number ? ' · ' + payNo(pay.number) : ''), 'ok');
   renderTicket(false);
 });
 
@@ -991,6 +1095,7 @@ H['tk-print'] = () => {
     (o.delivery_fee ? '<div class="l"><span>Livraison</span><span>+' + fmt(o.delivery_fee) + '</span></div>' : '') +
     (o.discount ? '<div class="l"><span>Remise fidélité</span><span>−' + fmt(o.discount) + '</span></div>' : '') +
     '<div class="l" style="font-size:15px;font-weight:800"><span>TOTAL</span><span>' + money(o.total) + '</span></div>' +
+    (o.payments || []).filter(p => !p.voided_at).map(p => '<div class="l" style="font-size:11px"><span>' + payNo(p.number) + ' · ' + esc(METHODS[p.method]) + ' · ' + esc(dateShort(p.created_at)) + '</span><span>' + fmt(p.amount) + '</span></div>').join('') +
     '<div class="l"><span>Payé</span><span>' + fmt(o.paid) + '</span></div><div class="l" style="font-weight:800"><span>Reste</span><span>' + fmt(rest) + '</span></div><hr>' +
     '<div class="c">Suivez votre linge :</div><div class="qr">' + qrImg(trackUrl(o)) + '</div><div class="c" style="font-size:11px">' + esc(trackUrl(o).replace(/^https?:\/\//, '')) + '</div>' +
     '<div class="c" style="margin-top:6px">Présentez ce ticket au retrait. Merci !</div></div>';
@@ -1002,6 +1107,238 @@ H['tk-labels'] = () => {
   let n = 0, html = '';
   o.order_items.forEach(i => { for (let k = 0; k < i.qty; k++) { n++; html += '<div class="lbl-p"><b>' + tno(o) + '</b> <span>' + n + '/' + total + '</span><div>' + esc(i.name) + (i.color ? ' · ' + esc(i.color) : '') + '</div><div>' + esc(c.name || '') + (o.due_at ? ' · ' + esc(dayLabel(o.due_at)) : '') + '</div></div>'; } });
   $('#print').innerHTML = html;
+  setTimeout(() => window.print(), 50);
+};
+
+/* =========================================================
+   Lots : plusieurs tickets lavés ensemble, un clic pour tous
+   ========================================================= */
+const LOT_STEPS = ['recu', 'lavage', 'pret'];
+const LOT_NEXT = { recu: ['lavage', 'Mettre tout le lot en lavage'], lavage: ['pret', 'Tout le lot est prêt'] };
+let LCUR = null;
+const lotOrders = id => (S.orders || []).filter(o => o.lot_id === id).sort((a, b) => (a.number || 1e9) - (b.number || 1e9));
+const lotOpen = os => os.filter(o => OPEN.includes(o.status));
+const piecesOf = o => (o.order_items || []).reduce((s, i) => s + i.qty, 0);
+
+async function loadLots() {
+  if (navigator.onLine) {
+    try {
+      S.lots = await withTimeout(q(sb.from('lots').select('id,number,status,note,created_at').eq('pressing_id', pid()).order('created_at', { ascending: false }).limit(200)), 10000);
+      OB.list.forEach(op => { if (op.t === 'lot') { const l = findLot(op.id); if (l) l.status = op.status; } });
+      lset('lots', S.lots);
+      return S.lots;
+    } catch (e) { if (!isNet(e)) throw e; }
+  }
+  if (!S.lots) S.lots = lget('lots', []);
+  return S.lots;
+}
+
+async function viewLots(seq) {
+  await Promise.all([loadOrders(true), loadLots()]);
+  if (!alive(seq)) return;
+  const own = isOwner();
+  const free = S.orders.filter(o => (o.status === 'recu' || o.status === 'lavage') && !o.lot_id);
+  const rows = S.lots.map(l => { const os = lotOrders(l.id); return { l, os, open: lotOpen(os) }; });
+  const active = rows.filter(r => r.open.length), done = rows.filter(r => !r.open.length).slice(0, 30);
+  const row = r => {
+    const st = STATUS[r.l.status], n = r.os.length, p = r.os.reduce((s, o) => s + piecesOf(o), 0);
+    return '<a class="li" href="#/l/' + r.l.id + '"><span class="tno">' + esc(String(r.l.number).padStart(3, '0')) + '</span>' +
+      '<span class="mid"><span class="t">' + lotNo(r.l.number) + (r.l.note ? ' <span class="muted" style="font-weight:600">· ' + esc(r.l.note) + '</span>' : '') + '</span>' +
+      '<span class="s" style="display:block">' + n + ' ticket' + (n > 1 ? 's' : '') + ' · ' + p + ' pièce' + (p > 1 ? 's' : '') + ' · ' + esc(dateTime(r.l.created_at)) + '</span></span>' +
+      '<span class="r"><span class="badge ' + (r.open.length ? st.c : 's-retire') + '">' + (r.open.length ? st.l : 'Terminé') + '</span>' +
+      (r.open.length && r.open.length < n ? '<span class="muted" style="font-size:12px">' + (n - r.open.length) + ' retiré' + (n - r.open.length > 1 ? 's' : '') + '</span>' : '') + '</span></a>';
+  };
+  main().innerHTML =
+    '<div class="page-h"><div class="grow"><h1>Lots</h1><div class="muted" style="font-size:13px">Les tickets lavés ensemble. Un clic change l’état de tous.</div></div>' +
+      (own ? '<a class="btn primary sm" href="#/lots/new">' + I.plus + ' Nouveau lot</a>' : '') + '</div>' +
+    '<div class="stack">' +
+    (free.length ? '<div class="banner warn">' + I.ticket + '<span style="flex:1"><b>' + free.length + ' ticket' + (free.length > 1 ? 's' : '') + ' sans lot</b> à laver.</span>' +
+      (own ? '<a class="btn sm" href="#/lots/new">Faire un lot</a>' : '<a class="btn sm" href="#/" data-act="tk-sanslot">Voir</a>') + '</div>' : '') +
+    '<section class="card" style="padding:4px 14px"><div class="sec-t" style="padding:10px 2px 4px">En cours</div><div class="list">' +
+      (active.length ? active.map(row).join('') : '<div class="empty"><b>Aucun lot en cours</b>' + (own ? 'Crée un lot avec les tickets de ta prochaine machine.' : 'Le gérant crée les lots.') + '</div>') + '</div></section>' +
+    (done.length ? '<section class="card" style="padding:4px 14px"><div class="sec-t" style="padding:10px 2px 4px">Terminés</div><div class="list">' + done.map(row).join('') + '</div></section>' : '') +
+    '</div>';
+}
+H['tk-sanslot'] = () => { S.filter = 'sanslot'; S.search = ''; };
+
+/* ---------- créer un lot / ajouter des tickets ---------- */
+async function viewLotNew(seq, params) {
+  const addTo = params.get('lot');
+  await Promise.all([loadOrders(true), loadLots()]);
+  if (!alive(seq)) return;
+  if (!isOwner()) { main().innerHTML = '<div class="card empty"><b>Réservé au gérant</b>Seul le gérant crée les lots. <a href="#/lots">Retour aux lots</a></div>'; return; }
+  const lot = addTo ? findLot(addTo) : null;
+  if (addTo && !lot) { main().innerHTML = '<div class="card empty"><b>Lot introuvable</b><a href="#/lots">Retour aux lots</a></div>'; return; }
+  S.lotSel = new Set(); S.lotSearch = '';
+  main().innerHTML =
+    '<div class="page-h"><a class="iconbtn" href="' + (lot ? '#/l/' + lot.id : '#/lots') + '" aria-label="Retour">' + I.back + '</a>' +
+      '<div class="grow"><h1>' + (lot ? 'Ajouter au ' + lotNo(lot.number) : 'Nouveau lot') + '</h1><div class="muted" style="font-size:13px">Coche les tickets qui partent ensemble au lavage.</div></div></div>' +
+    '<div class="stack">' +
+    (lot ? '' : '<div class="field"><label for="lot-note">Note (facultatif)</label><input class="inp" id="lot-note" maxlength="200" placeholder="Ex. machine 2, blanc, nettoyage à sec…"></div>') +
+    '<div><label for="lot-q" class="sr">Rechercher un ticket</label><input class="inp" id="lot-q" type="search" data-in="lot-q" placeholder="N° de ticket, nom ou téléphone"></div>' +
+    '<section class="card" style="padding:4px 14px"><div class="hstack" style="justify-content:space-between;padding:10px 2px 4px"><span class="sec-t">Tickets à laver</span>' +
+      '<button class="btn sm ghost" type="button" data-act="lot-all">Tout cocher</button></div><div class="list" id="lot-pick"></div></section>' +
+    '</div><div class="nw-spacer"></div>' +
+    '<div class="nw-bar lot-bar" id="lot-bar"><div style="flex:1;min-width:0" id="lot-sum"></div>' +
+      '<button type="button" class="btn sm" data-act="lot-create"' + (lot ? ' data-lot="' + lot.id + '"' : '') + ' style="flex:none">' + I.check + ' ' + (lot ? 'Ajouter' : 'Créer le lot') + '</button></div>';
+  renderLotPick();
+}
+function lotCandidates() {
+  return S.orders.filter(o => (o.status === 'recu' || o.status === 'lavage') && !o.lot_id)
+    .sort((a, b) => (b.express - a.express) || String(a.due_at || '9999').localeCompare(String(b.due_at || '9999')) || ((a.number || 1e9) - (b.number || 1e9)));
+}
+function renderLotPick() {
+  const box = $('#lot-pick'); if (!box) return;
+  const term = S.lotSearch.trim().toLowerCase(), dt = digits(term);
+  const list = lotCandidates().filter(o => !term || (dt && (String(o.number) === (dt.replace(/^0+/, '') || '0') || (dt.length >= 3 && digits(o.customers && o.customers.phone).includes(dt)))) || (o.customers && o.customers.name.toLowerCase().includes(term)));
+  box.innerHTML = list.length ? list.map(o => {
+    const off = o._pending || !o.number, p = piecesOf(o);
+    return '<label class="li pick' + (off ? ' off' : '') + '"><input type="checkbox" data-ch="lot-pick" value="' + o.id + '"' + (S.lotSel.has(o.id) ? ' checked' : '') + (off ? ' disabled' : '') + '>' +
+      '<span class="tno">' + (o.number ? tno(o) : '…') + '</span>' +
+      '<span class="mid"><span class="t">' + esc(o.customers ? o.customers.name : 'Client supprimé') + (o.express ? ' <span class="badge b-warn">Express</span>' : '') + '</span>' +
+      '<span class="s" style="display:block">' + p + ' pièce' + (p > 1 ? 's' : '') + ' · ' + esc(itemsSummary(o.order_items)) + '</span></span>' +
+      '<span class="r">' + (off ? '<span class="badge b-warn">À envoyer</span>' : '<span class="badge ' + STATUS[o.status].c + '">' + STATUS[o.status].l + '</span>') +
+      (o.due_at ? '<span class="' + (isLate(o) ? 'due' : 'muted') + '" style="font-size:12px">' + esc(new Date(o.due_at + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })) + '</span>' : '') + '</span></label>';
+  }).join('') : '<div class="empty"><b>Aucun ticket à mettre dans un lot</b>' + (term ? 'Change ta recherche.' : 'Tous les tickets reçus sont déjà dans un lot.') + '</div>';
+  renderLotSum();
+}
+function renderLotSum() {
+  const el = $('#lot-sum'); if (!el) return;
+  const sel = lotCandidates().filter(o => S.lotSel.has(o.id)), p = sel.reduce((s, o) => s + piecesOf(o), 0);
+  el.innerHTML = sel.length ? '<b>' + sel.length + ' ticket' + (sel.length > 1 ? 's' : '') + '</b> · ' + p + ' pièce' + (p > 1 ? 's' : '') : 'Coche des tickets';
+}
+HC['lot-pick'] = t => { if (t.checked) S.lotSel.add(t.value); else S.lotSel.delete(t.value); renderLotSum(); };
+HI['lot-q'] = t => { S.lotSearch = t.value; renderLotPick(); };
+H['lot-all'] = () => {
+  const boxes = Array.from(document.querySelectorAll('[data-ch="lot-pick"]:not(:disabled)'));
+  const all = boxes.length && boxes.every(b => b.checked);
+  boxes.forEach(b => { b.checked = !all; if (b.checked) S.lotSel.add(b.value); else S.lotSel.delete(b.value); });
+  renderLotSum();
+};
+H['lot-create'] = t => {
+  if (!needWrite()) return;
+  const ids = Array.from(S.lotSel);
+  if (!ids.length) { toast('Coche au moins un ticket.', 'bad'); return; }
+  if (!navigator.onLine) { toast('Créer un lot demande internet. Les changements d’état, eux, marchent hors connexion.', 'bad'); return; }
+  busy(t, async () => {
+    if (t.dataset.lot) {
+      await q(sb.rpc('lot_add_orders', { p_lot: t.dataset.lot, p_orders: ids }));
+      toast(ids.length + ' ticket' + (ids.length > 1 ? 's' : '') + ' ajouté' + (ids.length > 1 ? 's' : ''), 'ok');
+      location.hash = '#/l/' + t.dataset.lot;
+    } else {
+      const note = $('#lot-note') ? $('#lot-note').value.trim() : '';
+      const r = await q(sb.rpc('create_lot', { p_pressing: pid(), p_orders: ids, p_note: note }));
+      toast(lotNo(r.number) + ' créé', 'ok');
+      location.hash = '#/l/' + r.id;
+    }
+  });
+};
+
+/* ---------- un lot ---------- */
+async function viewLot(seq, id) {
+  await loadLots();
+  if (!S.orders) S.orders = lget('orders', []);
+  if (navigator.onLine) {
+    try {
+      const rows = await withTimeout(q(sb.from('orders').select(ORDER_SEL).eq('lot_id', id)), 10000);
+      S.orders.forEach(o => { if (o.lot_id === id && !o._pending && !rows.some(r => r.id === o.id)) { o.lot_id = null; o.lots = null; } });
+      rows.forEach(upsertOrder); OB.list.forEach(applyOp); saveOrders();
+    } catch (e) { if (!isNet(e)) throw e; }
+  }
+  if (!alive(seq)) return;
+  LCUR = findLot(id);
+  if (!LCUR) { main().innerHTML = '<div class="card empty"><b>Lot introuvable</b>' + (navigator.onLine ? '' : 'Il n’est pas encore sur ce téléphone. ') + '<a href="#/lots">Retour aux lots</a></div>'; return; }
+  renderLot();
+}
+function notified() { return lget('notified', {}); }
+function renderLot() {
+  const l = LCUR, os = lotOrders(l.id), open = lotOpen(os), own = isOwner();
+  const idx = LOT_STEPS.indexOf(l.status), next = LOT_NEXT[l.status];
+  const np = os.reduce((s, o) => s + piecesOf(o), 0);
+  const ready = os.filter(o => o.status === 'pret'), sent = notified();
+  const pendingOp = OB.list.some(op => op.t === 'lot' && op.id === l.id);
+  main().innerHTML =
+    '<div class="page-h"><a class="iconbtn" href="#/lots" aria-label="Retour aux lots">' + I.back + '</a>' +
+      '<div class="grow"><h1>' + lotNo(l.number) + '</h1><div class="muted" style="font-size:13px">' + os.length + ' ticket' + (os.length > 1 ? 's' : '') + ' · ' + np + ' pièce' + (np > 1 ? 's' : '') + ' · créé le ' + esc(dateTime(l.created_at)) + '</div></div>' +
+      '<span class="badge ' + (open.length ? STATUS[l.status].c : 's-retire') + '" style="font-size:13px">' + (open.length ? STATUS[l.status].l : 'Terminé') + '</span></div>' +
+    (pendingOp ? '<div class="banner off">' + I.wifiOff + '<span style="flex:1"><b>Pas encore envoyé.</b> Le changement d’état est gardé sur ce téléphone et partira au retour du réseau.</span></div>' : '') +
+    '<div class="two-col"><div class="stack">' +
+    '<section class="card stack">' + (l.note ? '<p style="margin:0"><b>Note :</b> ' + esc(l.note) + '</p>' : '') +
+      '<div class="steps" style="grid-template-columns:repeat(3,minmax(0,1fr))" aria-label="Avancement du lot">' + LOT_STEPS.map((s, i) => '<div class="st' + (i < idx ? ' done' : '') + (i === idx ? ' cur' : '') + '"><i></i>' + STATUS[s].l + '</div>').join('') + '</div>' +
+      (!open.length ? '<p class="hint">Tous les tickets de ce lot ont été remis aux clients.</p>'
+        : (next ? '<button class="btn primary block" type="button" data-act="lot-next" data-to="' + next[0] + '">' + next[1] + ' (' + open.length + ' ticket' + (open.length > 1 ? 's' : '') + ')</button>' +
+            '<p class="hint">Les ' + open.length + ' tickets changent d’état en même temps. La page de suivi de chaque client se met à jour toute seule.</p>'
+          : '<p class="hint">Le lot est prêt. Préviens les clients, puis remets chaque ticket au retrait.</p>') +
+          (idx > 0 ? '<button class="btn sm ghost" type="button" data-act="lot-prev">Revenir à l’étape précédente</button>' : '')) +
+    '</section>' +
+    (ready.length ? '<section class="card stack"><div class="card-h" style="margin:0"><h2>Prévenir les clients</h2><span class="muted" style="font-size:13px">' + ready.filter(o => sent[o.id]).length + ' / ' + ready.length + ' prévenus</span></div>' +
+      '<p class="hint" style="margin:0">WhatsApp ouvre une conversation à la fois : un appui par client, le message est déjà écrit.</p><div class="list">' +
+      ready.map(o => { const c = o.customers || {}; return '<div class="li" style="cursor:default"><span class="tno">' + tno(o) + '</span><span class="mid"><span class="t">' + esc(c.name || 'Client supprimé') + '</span>' +
+        '<span class="s" style="display:block">' + (o.total - o.paid > 0 ? 'Reste ' + fmt(o.total - o.paid) + ' F' : 'Payé') + '</span></span>' +
+        (c.phone ? '<a class="btn sm ' + (sent[o.id] ? 'sent' : 'wa') + '" href="' + esc(waLink(c.phone, msgs(o).ready)) + '" target="_blank" rel="noopener" data-act="lot-wa" data-id="' + o.id + '">' + (sent[o.id] ? I.check + ' Envoyé' : I.wa + ' Prévenir') + '</a>' : '<span class="muted" style="font-size:12px">Pas de numéro</span>') + '</div>'; }).join('') +
+      '</div></section>' : '') +
+    '</div><div class="stack">' +
+    '<section class="card" style="padding:4px 14px"><div class="sec-t" style="padding:10px 2px 4px">Tickets du lot</div><div class="list">' +
+      (os.length ? os.map(o => { const rest = o.total - o.paid, p = piecesOf(o);
+        return '<div class="li" style="cursor:default"><a href="#/t/' + o.id + '" class="hstack" style="flex:1;min-width:0;flex-wrap:nowrap;gap:12px;color:inherit;text-decoration:none"><span class="tno">' + tno(o) + '</span>' +
+          '<span class="mid"><span class="t">' + esc(o.customers ? o.customers.name : 'Client supprimé') + '</span><span class="s" style="display:block">' + p + ' pièce' + (p > 1 ? 's' : '') + (o.status !== 'annule' ? ' · ' + (rest > 0 ? 'reste ' + fmt(rest) + ' F' : 'payé') : '') + '</span></span>' +
+          '<span class="badge ' + STATUS[o.status].c + '">' + STATUS[o.status].l + '</span></a>' +
+          (own && OPEN.includes(o.status) && o.status !== 'pret' ? '<button class="btn sm ghost" type="button" data-act="lot-remove" data-id="' + o.id + '" aria-label="Sortir le ticket ' + tno(o) + ' du lot">Sortir</button>' : '') + '</div>'; }).join('')
+        : '<div class="empty"><b>Lot vide</b>' + (own ? 'Ajoute des tickets ou supprime ce lot.' : '') + '</div>') +
+    '</div></section>' +
+    '<section class="card stack"><div class="hstack">' +
+      (own && l.status !== 'pret' ? '<a class="btn" href="#/lots/new?lot=' + l.id + '">' + I.plus + ' Ajouter des tickets</a>' : '') +
+      '<button class="btn" type="button" data-act="lot-print">' + I.print + ' Imprimer la fiche</button></div>' +
+      (own ? '<button class="btn sm ghost danger" type="button" data-act="lot-del">Supprimer le lot</button><p class="hint" style="margin:0">Supprimer le lot ne touche pas aux tickets : ils redeviennent « sans lot ».</p>' : '') +
+    '</section></div></div>';
+}
+async function setLotStatus(to) {
+  const l = LCUR, prev = { lot: l.status, orders: {} };
+  lotOrders(l.id).forEach(o => { if (OPEN.includes(o.status)) prev.orders[o.id] = { status: o.status, ready_at: o.ready_at, picked_at: o.picked_at }; });
+  return doOp({ t: 'lot', id: l.id, status: to, prev });
+}
+H['lot-next'] = t => {
+  if (!needWrite()) return;
+  const to = t.dataset.to, n = lotOpen(lotOrders(LCUR.id)).length;
+  if (to === 'pret' && !confirm('Marquer les ' + n + ' tickets du ' + lotNo(LCUR.number) + ' comme prêts ?')) return;
+  busy(t, async () => {
+    const r = await setLotStatus(to);
+    toast((r === 'queued' ? 'Gardé sur ce téléphone : ' : '') + lotNo(LCUR.number) + ' · ' + n + ' ticket' + (n > 1 ? 's' : '') + ' « ' + STATUS[to].l + ' »' + (to === 'pret' ? '. Préviens les clients.' : ''), 'ok');
+    renderLot();
+  });
+};
+H['lot-prev'] = t => {
+  if (!needWrite()) return;
+  const i = LOT_STEPS.indexOf(LCUR.status); if (i <= 0) return;
+  if (!confirm('Remettre tout le lot à l’étape « ' + STATUS[LOT_STEPS[i - 1]].l + ' » ?')) return;
+  busy(t, async () => { await setLotStatus(LOT_STEPS[i - 1]); renderLot(); });
+};
+H['lot-wa'] = t => { const n = notified(); n[t.dataset.id] = Date.now(); lset('notified', n); setTimeout(renderLot, 400); };
+H['lot-remove'] = t => {
+  if (!needWrite()) return;
+  if (!navigator.onLine) { toast('Modifier un lot demande internet.', 'bad'); return; }
+  const o = findOrder(t.dataset.id); if (!o || !confirm('Sortir le ticket ' + tno(o) + ' du ' + lotNo(LCUR.number) + ' ? Il garde son état actuel.')) return;
+  busy(t, async () => { await q(sb.rpc('lot_remove_order', { p_order: o.id })); o.lot_id = null; o.lots = null; saveOrders(); toast('Ticket ' + tno(o) + ' sorti du lot', 'ok'); renderLot(); });
+};
+H['lot-del'] = t => {
+  if (!navigator.onLine) { toast('Supprimer un lot demande internet.', 'bad'); return; }
+  if (!confirm('Supprimer le ' + lotNo(LCUR.number) + ' ? Les tickets restent, sans lot.')) return;
+  const id = LCUR.id;
+  busy(t, async () => {
+    await q(sb.rpc('delete_lot', { p_lot: id }));
+    S.orders.forEach(o => { if (o.lot_id === id) { o.lot_id = null; o.lots = null; } });
+    S.lots = S.lots.filter(x => x.id !== id); saveOrders();
+    toast('Lot supprimé', 'ok'); location.hash = '#/lots';
+  });
+};
+H['lot-print'] = () => {
+  const l = LCUR, p = S.pressing, os = lotOrders(l.id), np = os.reduce((s, o) => s + piecesOf(o), 0);
+  $('#print').innerHTML = '<div class="rcpt"><h3>' + esc(p.name) + '</h3><hr>' +
+    '<div class="c" style="font-size:22px;font-weight:800">' + esc(lotNo(l.number).toUpperCase()) + '</div>' +
+    '<div class="c">' + esc(dateTime(l.created_at)) + ' · ' + os.length + ' tickets · ' + np + ' pièces</div>' + (l.note ? '<div class="c">' + esc(l.note) + '</div>' : '') + '<hr>' +
+    os.map(o => '<div class="l"><span>' + tno(o) + ' ' + esc((o.customers && o.customers.name) || '') + '</span><span>' + piecesOf(o) + ' p.</span></div>' +
+      '<div style="font-size:10px;margin-bottom:3px">' + esc(itemsSummary(o.order_items)) + (o.express ? ' · EXPRESS' : '') + '</div>').join('') +
+    '<hr><div class="l" style="font-weight:800"><span>TOTAL</span><span>' + np + ' pièces</span></div></div>';
   setTimeout(() => window.print(), 50);
 };
 
@@ -1094,7 +1431,7 @@ async function viewCaisse(seq) {
   const chartFrom = startOfDay(-(chartDays - 1));
   const qFrom = new Date(Math.min(from.getTime(), chartFrom.getTime())).toISOString();
   const [pays, orders, open] = await Promise.all([
-    q(sb.from('payments').select('amount,method,created_at,orders(id,number,customers(name))').eq('pressing_id', pid()).gte('created_at', qFrom).order('created_at', { ascending: false }).limit(3000)),
+    q(sb.from('payments').select('number,amount,method,created_at,orders(id,number,customers(name))').eq('pressing_id', pid()).is('voided_at', null).gte('created_at', qFrom).order('created_at', { ascending: false }).limit(3000)),
     q(sb.from('orders').select('total,status,created_at,order_items(name,qty)').eq('pressing_id', pid()).neq('status', 'annule').gte('created_at', from.toISOString()).limit(3000)),
     q(sb.from('orders').select('total,paid').eq('pressing_id', pid()).neq('status', 'annule').limit(5000))
   ]);
@@ -1124,7 +1461,7 @@ async function viewCaisse(seq) {
       '<div class="bars" role="img" aria-label="Encaissements par jour">' + days.map((x, i) => '<div class="' + (i === days.length - 1 ? 'today' : '') + '" title="' + esc(x.d.toLocaleDateString('fr-FR')) + ' : ' + fmt(x.v) + ' F"><i style="height:' + (x.v / vmax * 100) + '%"></i></div>').join('') + '</div>' +
       '<div class="bars-x">' + days.map((x, i) => '<span>' + ((chartDays <= 7 || i % 5 === 0 || i === days.length - 1) ? x.d.toLocaleDateString('fr-FR', chartDays <= 7 ? { weekday: 'short' } : { day: 'numeric' }) : '') + '</span>').join('') + '</div></section>' +
     '<section class="card"><div class="card-h"><h2>Habits les plus déposés</h2></div>' + (top.length ? top.map(([n, v]) => '<div style="margin:8px 0"><div class="kv" style="padding:0 0 4px"><span>' + esc(n) + '</span><b>' + v + '</b></div><div class="meter"><i style="width:' + (v / topMax * 100) + '%"></i></div></div>').join('') : '<p class="hint">Aucun dépôt sur la période.</p>') + '</section></div>' +
-    '<section class="card"><div class="card-h"><h2>Derniers paiements</h2></div><div class="list">' + (inP.length ? inP.slice(0, 40).map(p => '<a class="li" href="#/t/' + (p.orders ? p.orders.id : '') + '"><span class="mid"><span class="t">' + (p.orders ? ticketNo(p.orders.number) : '') + ' · ' + esc(p.orders && p.orders.customers ? p.orders.customers.name : '') + '</span><span class="s" style="display:block">' + esc(dateTime(p.created_at)) + ' · ' + METHODS[p.method] + '</span></span><span class="r"><b class="num">' + fmt(p.amount) + ' F</b></span></a>').join('') : '<div class="empty"><b>Aucun paiement</b>sur cette période.</div>') + '</div></section>' +
+    '<section class="card"><div class="card-h"><h2>Derniers paiements</h2></div><div class="list">' + (inP.length ? inP.slice(0, 40).map(p => '<a class="li" href="#/t/' + (p.orders ? p.orders.id : '') + '"><span class="mid"><span class="t">' + (p.orders ? ticketNo(p.orders.number) : '') + ' · ' + esc(p.orders && p.orders.customers ? p.orders.customers.name : '') + '</span><span class="s" style="display:block">' + payNo(p.number) + ' · ' + esc(dateTime(p.created_at)) + ' · ' + METHODS[p.method] + '</span></span><span class="r"><b class="num">' + fmt(p.amount) + ' F</b></span></a>').join('') : '<div class="empty"><b>Aucun paiement</b>sur cette période.</div>') + '</div></section>' +
     '</div>';
 }
 H['ca-per'] = t => { S.cashPeriod = t.dataset.p; route(); };
@@ -1156,16 +1493,17 @@ async function viewSettings(seq) {
       '<p class="hint">Mets 0 pour désactiver la fidélité.</p>' +
       (own ? '<button class="btn primary" type="submit">Enregistrer</button>' : '') + '</form>' +
     '<section class="card stack"><div class="card-h" style="margin:0"><h2>Catalogue des habits</h2><span class="muted" style="font-size:13px">' + S.types.length + ' habits</span></div>' +
-      '<form class="stack" data-form="add-type" novalidate style="background:var(--surface-2);padding:12px;border-radius:12px"><div class="sec-t">Ajouter un habit</div>' +
+      (own ? '' : '<p class="hint">Seul le gérant peut modifier le catalogue et les prix.</p>') +
+      (!own ? '' : '<form class="stack" data-form="add-type" novalidate style="background:var(--surface-2);padding:12px;border-radius:12px"><div class="sec-t">Ajouter un habit</div>' +
         '<div class="field"><label for="at-name">Nom de l’habit</label><input class="inp" id="at-name" name="tname" maxlength="60" placeholder="Ex. Bazin riche, Thiaya, Blouse…" required></div>' +
         '<div class="row2"><div class="field"><label for="at-cat">Catégorie</label><select class="inp" id="at-cat" name="cat">' + CATEGORIES.map(c => '<option>' + c + '</option>').join('') + '</select></div>' +
         '<div class="field"><label for="at-price">Prix (FCFA)</label><input class="inp" id="at-price" name="price" inputmode="numeric" data-in="amt-fmt" placeholder="0"></div></div>' +
-        '<button class="btn primary" type="submit">' + I.plus + ' Ajouter au catalogue</button></form>' +
+        '<button class="btn primary" type="submit">' + I.plus + ' Ajouter au catalogue</button></form>') +
       CATEGORIES.filter(c => byCat[c]).map(c => '<div><div class="sec-t" style="margin:8px 0 4px">' + c + '</div>' + byCat[c].map(t =>
         '<div class="li" style="cursor:default;min-height:52px;gap:8px"><span class="mid"><span class="t" style="font-weight:700' + (t.active ? '' : ';color:var(--muted);text-decoration:line-through') + '">' + esc(t.name) + '</span></span>' +
-        '<label class="sr" for="tp-' + t.id + '">Prix de ' + esc(t.name) + '</label><input class="price-inp" id="tp-' + t.id + '" inputmode="numeric" data-in="amt-fmt" data-ch="type-price" data-id="' + t.id + '" value="' + fmt(t.price) + '">' +
-        '<button type="button" class="btn sm ghost" data-act="type-toggle" data-id="' + t.id + '" title="' + (t.active ? 'Masquer' : 'Afficher') + '">' + (t.active ? 'Masquer' : 'Afficher') + '</button>' +
-        '<button type="button" class="iconbtn" style="width:38px;height:38px" data-act="type-del" data-id="' + t.id + '" aria-label="Supprimer ' + esc(t.name) + '">' + I.trash + '</button></div>').join('') + '</div>').join('') +
+        '<label class="sr" for="tp-' + t.id + '">Prix de ' + esc(t.name) + '</label><input class="price-inp" id="tp-' + t.id + '" inputmode="numeric" data-in="amt-fmt" data-ch="type-price" data-id="' + t.id + '" value="' + fmt(t.price) + '"' + dis + '>' +
+        (!own ? '' : '<button type="button" class="btn sm ghost" data-act="type-toggle" data-id="' + t.id + '" title="' + (t.active ? 'Masquer' : 'Afficher') + '">' + (t.active ? 'Masquer' : 'Afficher') + '</button>' +
+        '<button type="button" class="iconbtn" style="width:38px;height:38px" data-act="type-del" data-id="' + t.id + '" aria-label="Supprimer ' + esc(t.name) + '">' + I.trash + '</button>') + '</div>').join('') + '</div>').join('') +
     '</section></div><div class="stack">' +
     '<section class="card stack"><h2 style="font-size:17px">Abonnement</h2>' +
       '<div class="hstack"><span class="badge ' + ({ trial: 'b-info', active: 'b-ok', expired: 'b-bad', suspended: 'b-bad' })[ss.k] + '">' + ss.l + '</span><span class="muted">' + (ss.days >= 0 ? 'jusqu’au ' + esc(dateShort(p.paid_until)) : 'depuis le ' + esc(dateShort(p.paid_until))) + '</span></div>' +
@@ -1173,7 +1511,8 @@ async function viewSettings(seq) {
       (pay ? '<a class="btn wa" href="' + esc(pay) + '" target="_blank" rel="noopener">' + I.wa + ' Payer / nous contacter</a>' : '') + '</section>' +
     '<section class="card stack"><h2 style="font-size:17px">Équipe</h2>' +
       (own ? '<div><div class="lbl">Code pour tes employés</div><div style="font-size:30px;font-weight:800;letter-spacing:.2em">' + esc(p.join_code) + '</div>' +
-        '<p class="hint">L’employé crée un compte sur Pressing Pro puis choisit « Rejoindre l’équipe » avec ce code.</p></div>' +
+        '<p class="hint">L’employé crée un compte sur Pressing Pro puis choisit « Rejoindre l’équipe » avec ce code. Le code change tout seul quand tu retires un employé.</p>' +
+        '<button class="btn sm ghost" type="button" data-act="team-regen">Changer le code</button></div>' +
         '<a class="btn" href="' + esc('https://wa.me/?text=' + encodeURIComponent('Rejoins ' + p.name + ' sur Pressing Pro : ' + new URL('app.html#signup', location.href.split('#')[0]).href + '\nCode équipe : ' + p.join_code)) + '" target="_blank" rel="noopener">' + I.wa + ' Partager le code</a><button class="btn" type="button" data-act="team-qr">' + I.qr + ' QR code pour l’employé</button>' : '') +
       '<div class="list">' + members.map(m => '<div class="li" style="cursor:default"><span class="avatar">' + esc(initials(m.display_name || '?')) + '</span><span class="mid"><span class="t">' + esc(m.display_name || 'Sans nom') + (m.user_id === S.user.id ? ' (toi)' : '') + '</span><span class="s" style="display:block">' + (m.role === 'owner' ? 'Gérant' : 'Employé') + '</span></span>' +
         (own && m.role === 'staff' ? '<button type="button" class="btn sm ghost danger" data-act="member-del" data-id="' + m.user_id + '">Retirer</button>' : '') + '</div>').join('') + '</div></section>' +
@@ -1225,7 +1564,15 @@ H['type-del'] = t => {
   const ty = S.types.find(x => x.id === t.dataset.id); if (!ty || !confirm('Supprimer « ' + ty.name + ' » du catalogue ? (Les anciens tickets ne changent pas.)')) return;
   busy(t, async () => { await q(sb.from('garment_types').delete().eq('id', ty.id)); await loadTypes(); route(); });
 };
+async function reloadJoinCode() {
+  const r = await q(sb.from('pressings').select('join_code').eq('id', pid()).single());
+  S.pressing.join_code = r.join_code;
+}
 H['member-del'] = t => {
-  if (!confirm('Retirer cet employé de l’équipe ?')) return;
-  busy(t, async () => { await q(sb.from('members').delete().eq('pressing_id', pid()).eq('user_id', t.dataset.id)); toast('Employé retiré', 'ok'); route(); });
+  if (!confirm('Retirer cet employé de l’équipe ? Le code d’équipe sera changé : donne le nouveau code à tes autres futurs employés.')) return;
+  busy(t, async () => { await q(sb.from('members').delete().eq('pressing_id', pid()).eq('user_id', t.dataset.id)); await reloadJoinCode(); toast('Employé retiré, nouveau code créé', 'ok'); route(); });
+};
+H['team-regen'] = t => {
+  if (!confirm('Créer un nouveau code d’équipe ? L’ancien ne marchera plus (les employés déjà inscrits restent).')) return;
+  busy(t, async () => { S.pressing.join_code = await q(sb.rpc('regen_join_code', { p_pressing: pid() })); toast('Nouveau code : ' + S.pressing.join_code, 'ok'); route(); });
 };

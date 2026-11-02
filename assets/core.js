@@ -35,6 +35,8 @@ export const dayLabel = iso => iso ? new Date(iso + 'T12:00:00').toLocaleDateStr
 export const dateTime = ts => ts ? new Date(ts).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
 export const dateShort = ts => ts ? new Date(ts).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
 export const ticketNo = n => '#' + String(n).padStart(4, '0');
+export const lotNo = n => 'Lot ' + String(n).padStart(3, '0');
+export const payNo = n => n ? 'P-' + String(n).padStart(5, '0') : 'P-…';
 export const startOfDay = (offsetDays = 0) => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + offsetDays); return d; };
 
 /* ---------- métier ---------- */
@@ -75,7 +77,7 @@ export function errMsg(e) {
     [/Password should be at least/i, 'Le mot de passe doit faire au moins 6 caractères.'],
     [/rate limit/i, 'Trop de tentatives. Réessaie dans quelques minutes.'],
     [/Failed to fetch|NetworkError/i, 'Pas de connexion internet. Réessaie.'],
-    [/row-level security|permission denied/i, 'Action refusée. Ton abonnement est peut-être expiré.'],
+    [/row-level security|permission denied/i, 'Action refusée : réservé au gérant, ou abonnement expiré.'],
     [/duplicate key.*garment_types/i, 'Cet article existe déjà dans le catalogue.'],
     [/duplicate key.*customers/i, 'Un client a déjà ce numéro.']
   ];
@@ -135,5 +137,6 @@ export const I = {
   qr: sv('<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 17h4v4h-4"/>'),
   wifiOff: sv('<path d="M2 2l20 20M8.5 16.4a5 5 0 0 1 7 0M5 12.9a10 10 0 0 1 5.2-2.7M19 12.9a10 10 0 0 0-2.2-1.6M1.5 9a15 15 0 0 1 4.3-2.8M22.5 9A15 15 0 0 0 10.7 5"/><circle cx="12" cy="20" r=".8" fill="currentColor"/>'),
   sync: sv('<path d="M20 11a8 8 0 0 0-14.7-4.3L3 9M4 13a8 8 0 0 0 14.7 4.3L21 15"/><path d="M3 4v5h5M21 20v-5h-5"/>'),
-  link: sv('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>')
+  link: sv('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>'),
+  layers: sv('<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 12.5l9 5 9-5"/><path d="M3 17l9 5 9-5"/>')
 };
